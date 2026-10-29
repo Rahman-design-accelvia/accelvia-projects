@@ -38,7 +38,7 @@ interface MiddlePanelScopeProps {
   financialSettings?: ProjectFinancialSettings;
   onUpdateFinancials: (settings: Partial<ProjectFinancialSettings>) => void;
   onCreateEstimateDraft: (pkgId: string | null, title: string, items: Array<{ title: string; hours: number }>) => void;
-  onSendEstimate: (versionId: string, email: string) => void;
+  onSendEstimate: (versionId: string, email: string, postToConversation: boolean) => void;
   onGenerateWorkOrder: (versionId: string, kind: 'detailed' | 'summary') => void;
   onUpdateWorkOrderStatus: (woId: string, status: any) => void;
   onOpenClientReviewModal: (versionId: string) => void;
@@ -68,6 +68,7 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
   const [selectedVersionForSend, setSelectedVersionForSend] = useState<ScopeVersion | null>(null);
   const [sendRecipientEmail, setSendRecipientEmail] = useState('robert@techspheredynamics.com');
+  const [shareToConversation, setShareToConversation] = useState(true);
 
   const [previewWorkOrder, setPreviewWorkOrder] = useState<WorkOrder | null>(null);
 
@@ -114,7 +115,7 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
   const handleSendEstimateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedVersionForSend) return;
-    onSendEstimate(selectedVersionForSend.id, sendRecipientEmail);
+    onSendEstimate(selectedVersionForSend.id, sendRecipientEmail, shareToConversation);
     setIsSendModalOpen(false);
     setSelectedVersionForSend(null);
   };
@@ -645,6 +646,19 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
               onChange={(e) => setSendRecipientEmail(e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
             />
+          </div>
+
+          <div className="flex items-center gap-2.5 p-3 rounded-lg bg-orange-950/40 border border-orange-500/50">
+            <input
+              type="checkbox"
+              id="shareToConversation"
+              checked={shareToConversation}
+              onChange={(e) => setShareToConversation(e.target.checked)}
+              className="w-4 h-4 rounded text-orange-500 focus:ring-orange-500 bg-slate-900 border-slate-700 cursor-pointer"
+            />
+            <label htmlFor="shareToConversation" className="text-xs text-orange-200 font-semibold cursor-pointer">
+              Post interactive estimate card to project conversation feed
+            </label>
           </div>
 
           <div className="text-xs text-slate-300 bg-slate-950/60 p-3 rounded-lg border border-slate-800 space-y-1">

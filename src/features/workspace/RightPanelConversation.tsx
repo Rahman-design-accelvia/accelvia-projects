@@ -2,9 +2,10 @@
 // Right Panel: Project Primary Conversation with rich-text, attachments, dual-time, and Super Admin masking
 
 import React, { useState } from 'react';
-import { Project, SafeMessage } from '../../types';
+import { Project, SafeMessage, ScopeVersion } from '../../types';
 import { useAuth } from '../auth/AuthContext';
 import { RichTextEditor } from '../conversations/RichTextEditor';
+import { EstimateConversationCard } from '../conversations/EstimateConversationCard';
 import { DualTimeBadge } from '../../components/DualTimeBadge';
 import { Modal } from '../../components/Modal';
 import { 
@@ -23,9 +24,11 @@ import {
 interface RightPanelConversationProps {
   project: Project;
   messages: SafeMessage[];
+  versions: ScopeVersion[];
   onSendMessage: (contentJson: Record<string, unknown>, attachments: File[]) => void;
   onEditMessage: (messageId: string, newText: string) => void;
   onDeleteMessage: (messageId: string) => void;
+  onApproveEstimate: (versionId: string) => void;
   onOpenAuditConsole: () => void;
   onOpenEstimateDraftModal: () => void;
   onOpenCorrectTimeModal: (message: SafeMessage) => void;
@@ -34,9 +37,11 @@ interface RightPanelConversationProps {
 export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
   project,
   messages,
+  versions,
   onSendMessage,
   onEditMessage,
   onDeleteMessage,
+  onApproveEstimate,
   onOpenAuditConsole,
   onOpenEstimateDraftModal,
   onOpenCorrectTimeModal,
@@ -234,6 +239,25 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
                       <p className="whitespace-pre-wrap">{extractText(msg.content_json)}</p>
                     )}
                   </div>
+
+                  {/* Interactive Estimate Scope Card (Orange tab when pending; Green border when approved) */}
+                  {(() => {
+                    const matchedVersion = msg.estimate_version_id
+                      ? versions.find((v) => v.id === msg.estimate_version_id)
+                      : null;
+                    const cardData = matchedVersion || msg.estimate_card;
+
+                    if (cardData) {
+                      return (
+                        <EstimateConversationCard
+                          version={cardData as ScopeVersion}
+                          packageTitle={msg.estimate_card?.package_title || 'Core Project Scope'}
+                          onApprove={onApproveEstimate}
+                        />
+                      );
+                    }
+                    return null;
+                  })()}
 
                   {/* Attachments */}
                   {msg.attachments && msg.attachments.length > 0 && (

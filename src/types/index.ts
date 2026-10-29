@@ -155,6 +155,19 @@ export interface SafeMessage {
   is_edited: boolean;
   is_deleted: boolean;
   attachments: MessageAttachment[];
+  estimate_version_id?: string | null;
+  estimate_card?: {
+    version_id: string;
+    package_title: string;
+    version_number: number;
+    total_hours: number;
+    total_usd?: number | null;
+    total_bdt?: number | null;
+    status: ScopeVersionStatus;
+    items?: Array<{ title: string; hours: number }>;
+    approved_by_name?: string;
+    approved_at?: string;
+  } | null;
 }
 
 export interface ScopePackage {

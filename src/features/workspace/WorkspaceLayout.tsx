@@ -282,11 +282,13 @@ export const WorkspaceLayout: React.FC = () => {
     setVersions((prev) => [...prev, newVersion]);
   };
 
-  const handleSendEstimate = (versionId: string, email: string) => {
+  const handleSendEstimate = (versionId: string, email: string, postToConversation: boolean = true) => {
+    let targetVer: ScopeVersion | undefined;
+
     setVersions((prev) =>
       prev.map((v) => {
         if (v.id !== versionId) return v;
-        const updated = {
+        targetVer = {
           ...v,
           status: 'pending' as const,
           sent_at: new Date().toISOString(),
@@ -308,9 +310,107 @@ export const WorkspaceLayout: React.FC = () => {
         };
         setAuditEvents((a) => [auditEntry, ...a]);
 
-        return updated;
+        return targetVer;
       })
     );
+
+    // If requested, post interactive estimate card to the conversation feed
+    if (postToConversation) {
+      const verSnapshot = targetVer || versions.find((v) => v.id === versionId);
+      if (verSnapshot) {
+        const hoursFormatted = (verSnapshot.total_hours_snapshot || 0).toFixed(2);
+        const newMsg: SafeMessage = {
+          id: `msg-${Date.now()}`,
+          conversation_id: 'conv-1',
+          author_id: currentUser.user_id,
+          author_name: currentUser.display_name,
+          author_is_management: isSuperAdmin,
+          content_json: {
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [
+                  {
+                    type: 'text',
+                    text: `📋 Estimate Scope v${verSnapshot.version_number}.0 (${hoursFormatted} hrs) has been sent to client (${email}). Management can review and approve directly from this thread.`,
+                  },
+                ],
+              },
+            ],
+          },
+          event_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          is_edited: false,
+          is_deleted: false,
+          attachments: [],
+          estimate_version_id: verSnapshot.id,
+          estimate_card: {
+            version_id: verSnapshot.id,
+            package_title: 'Core Project Scope',
+            version_number: verSnapshot.version_number,
+            total_hours: verSnapshot.total_hours_snapshot,
+            total_usd: verSnapshot.total_usd_snapshot,
+            total_bdt: verSnapshot.total_bdt_snapshot,
+            status: 'pending',
+            items: verSnapshot.items?.map((it) => ({ title: it.title, hours: it.hours })),
+          },
+        };
+        setMessages((prev) => [...prev, newMsg]);
+      }
+    }
+  };
+
+  const handleApproveEstimateFromConversation = (versionId: string) => {
+    // 1. Update version to approved
+    setVersions((prev) =>
+      prev.map((v) => {
+        if (v.id !== versionId) return v;
+        return {
+          ...v,
+          status: 'approved',
+          approved_at: new Date().toISOString(),
+        };
+      })
+    );
+
+    // 2. Update conversation cards to approved
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.estimate_version_id === versionId || m.estimate_card?.version_id === versionId) {
+          return {
+            ...m,
+            estimate_card: m.estimate_card
+              ? {
+                  ...m.estimate_card,
+                  status: 'approved',
+                  approved_by_name: currentUser.display_name,
+                  approved_at: new Date().toISOString(),
+                }
+              : null,
+          };
+        }
+        return m;
+      })
+    );
+
+    // 3. Record audit event
+    const auditEntry: AuditEvent = {
+      id: `audit-${Date.now()}`,
+      organization_id: 'org-1',
+      actor_user_id: currentUser.user_id,
+      actor_role_snapshot: currentRole,
+      entity_type: 'scope_versions',
+      entity_id: versionId,
+      action: 'ADMIN_APPROVE_ESTIMATE',
+      before_state: { status: 'pending' },
+      after_state: { status: 'approved', approved_by: currentUser.display_name },
+      reason: 'Approved directly from conversation feed by management',
+      server_recorded_at: new Date().toISOString(),
+      source: 'ui',
+    };
+    setAuditEvents((a) => [auditEntry, ...a]);
   };
 
   const handleClientDecision = (
@@ -580,9 +680,11 @@ export const WorkspaceLayout: React.FC = () => {
         <RightPanelConversation
           project={activeProject}
           messages={messages}
+          versions={versions}
           onSendMessage={handleSendMessage}
           onEditMessage={handleEditMessage}
           onDeleteMessage={handleDeleteMessage}
+          onApproveEstimate={handleApproveEstimateFromConversation}
           onOpenAuditConsole={() => setIsAuditModalOpen(true)}
           onOpenEstimateDraftModal={() => handleCreateEstimateDraft(null, 'New Estimate Scope', [])}
           onOpenCorrectTimeModal={(msg) => setTimeCorrectionMessage(msg)}

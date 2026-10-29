@@ -222,6 +222,48 @@ export const SEED_MESSAGES: SafeMessage[] = [
     is_deleted: false,
     attachments: [],
   },
+  {
+    id: 'msg-4',
+    conversation_id: 'conv-1',
+    author_id: 'admin-1',
+    author_name: 'Sarah Connor',
+    author_is_management: false,
+    content_json: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: 'Here is the estimate proposal for the Initial Build Scope (80.00 hrs) sent to the client. You can review the scope line items and approve it directly below.',
+            },
+          ],
+        },
+      ],
+    },
+    event_at: '2026-10-30T01:00:00Z',
+    created_at: '2026-10-30T01:00:00Z',
+    updated_at: '2026-10-30T01:00:00Z',
+    is_edited: false,
+    is_deleted: false,
+    attachments: [],
+    estimate_version_id: 'ver-1',
+    estimate_card: {
+      version_id: 'ver-1',
+      package_title: 'Initial Build & Architecture Scope',
+      version_number: 1,
+      total_hours: 80.0,
+      total_usd: 4000.0,
+      total_bdt: 480000.0,
+      status: 'pending',
+      items: [
+        { title: 'Database Schema & Security RLS', hours: 30.0 },
+        { title: 'Three-Panel Workspace UI', hours: 35.0 },
+        { title: 'Work Order Generator Engine', hours: 15.0 },
+      ],
+    },
+  },
 ];
 
 export const SEED_PACKAGES: ScopePackage[] = [
@@ -240,7 +282,7 @@ export const SEED_VERSIONS: ScopeVersion[] = [
     id: 'ver-1',
     scope_package_id: 'pkg-1',
     version_number: 1,
-    status: 'approved',
+    status: 'pending',
     revision_type: 'initial',
     scope_summary: 'PostgreSQL schema, three-panel UI, dual-timezone display, and work order generation.',
     client_rate_usd_per_hour_snapshot: 50.0,
@@ -251,7 +293,6 @@ export const SEED_VERSIONS: ScopeVersion[] = [
     created_at: '2026-10-28T10:30:00Z',
     sent_at: '2026-10-28T11:00:00Z',
     event_at: '2026-10-28T11:00:00Z',
-    approved_at: '2026-10-29T15:00:00Z',
     items: [
       {
         id: 'item-1',
