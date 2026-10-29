@@ -61,13 +61,13 @@ export const WorkspaceLayout: React.FC = () => {
   const [timeCorrectionMessage, setTimeCorrectionMessage] = useState<SafeMessage | null>(null);
 
   // Active project
-  const activeProject = projects.find((p) => p.id === selectedProjectId) || projects[0];
-  const activeFinancials = financials[selectedProjectId];
-  const activePackages = packages.filter((p) => p.project_id === selectedProjectId);
+  const activeProject: Project | null = projects.find((p) => p.id === selectedProjectId) || projects[0] || null;
+  const activeFinancials = activeProject ? financials[activeProject.id] : undefined;
+  const activePackages = activeProject ? packages.filter((p) => p.project_id === activeProject.id) : [];
   const activeVersions = versions.filter((v) =>
     activePackages.some((pkg) => pkg.id === v.scope_package_id)
   );
-  const activeWorkOrders = workOrders.filter((wo) => wo.project_id === selectedProjectId);
+  const activeWorkOrders = activeProject ? workOrders.filter((wo) => wo.project_id === activeProject.id) : [];
 
   // Live Bangladesh & Local clock in top nav
   const [currentTimeInstant, setCurrentTimeInstant] = useState(new Date());
@@ -76,7 +76,7 @@ export const WorkspaceLayout: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  const topDualTime = formatDualTime(currentTimeInstant, activeProject.timezone);
+  const topDualTime = formatDualTime(currentTimeInstant, activeProject?.timezone || 'Asia/Dhaka');
 
   // Handlers
   const handleCreateClient = (clientData: Partial<Client>) => {
@@ -578,7 +578,9 @@ export const WorkspaceLayout: React.FC = () => {
           {/* Active project quick badge */}
           <div className="flex items-center gap-2 text-xs text-slate-400">
             <span>Project:</span>
-            <span className="font-semibold text-slate-200">{activeProject.name}</span>
+            <span className="font-semibold text-slate-200">
+              {activeProject ? activeProject.name : 'No project selected'}
+            </span>
           </div>
         </div>
 
@@ -701,16 +703,18 @@ export const WorkspaceLayout: React.FC = () => {
       )}
 
       {/* Standalone Client Review Portal Simulator */}
-      <ClientReviewModal
-        isOpen={Boolean(reviewVersionId)}
-        onClose={() => setReviewVersionId(null)}
-        version={reviewVersion}
-        project={activeProject}
-        onClientDecision={handleClientDecision}
-      />
+      {activeProject && (
+        <ClientReviewModal
+          isOpen={Boolean(reviewVersionId)}
+          onClose={() => setReviewVersionId(null)}
+          version={reviewVersion}
+          project={activeProject}
+          onClientDecision={handleClientDecision}
+        />
+      )}
 
       {/* Super Admin Privileged Event Time Correction Modal */}
-      {isSuperAdmin && (
+      {isSuperAdmin && activeProject && (
         <CorrectEventTimeModal
           isOpen={Boolean(timeCorrectionMessage)}
           onClose={() => setTimeCorrectionMessage(null)}

@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 
 interface MiddlePanelScopeProps {
-  project: Project;
+  project: Project | null;
   packages: ScopePackage[];
   versions: ScopeVersion[];
   workOrders: WorkOrder[];
@@ -135,6 +135,18 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
     });
     setIsFinModalOpen(false);
   };
+
+  if (!project) {
+    return (
+      <div className="w-[480px] h-full flex flex-col items-center justify-center bg-slate-900/60 border-r border-slate-800/80 p-8 text-center text-slate-500">
+        <Layers className="w-12 h-12 text-slate-700 mb-3" />
+        <h3 className="text-sm font-bold text-slate-300">No Project Selected</h3>
+        <p className="text-xs text-slate-500 mt-1 max-w-xs">
+          Create a client and project from the left panel to begin managing scope, estimates, and work orders.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-[480px] h-full flex flex-col bg-slate-900/60 border-r border-slate-800/80">

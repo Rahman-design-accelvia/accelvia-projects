@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 
 interface RightPanelConversationProps {
-  project: Project;
+  project: Project | null;
   messages: SafeMessage[];
   versions: ScopeVersion[];
   onSendMessage: (contentJson: Record<string, unknown>, attachments: File[]) => void;
@@ -77,6 +77,18 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
       return '';
     }
   };
+
+  if (!project) {
+    return (
+      <div className="flex-1 h-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center text-slate-500">
+        <MessageSquare className="w-12 h-12 text-slate-800 mb-3" />
+        <h3 className="text-sm font-bold text-slate-300">No Conversation Active</h3>
+        <p className="text-xs text-slate-500 mt-1 max-w-xs">
+          Select or initialize a project from the left panel to start messaging and sharing estimates.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 h-full flex flex-col bg-slate-950 overflow-hidden">

@@ -145,6 +145,15 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
 
       {/* Client & Project Tree */}
       <div className="flex-1 overflow-y-auto p-2 space-y-2">
+        {clients.length === 0 && (
+          <div className="text-center py-16 px-4 text-slate-500 space-y-2.5">
+            <Building2 className="w-8 h-8 mx-auto text-slate-700" />
+            <div className="text-xs font-semibold text-slate-300">Clean Slate Ready</div>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              No clients or projects found. Use the buttons above to create your first client company and project.
+            </p>
+          </div>
+        )}
         {clients.map((client) => {
           const clientProjects = filteredProjects.filter((p) => p.client_id === client.id);
           if (clientProjects.length === 0 && isMember) return null;
