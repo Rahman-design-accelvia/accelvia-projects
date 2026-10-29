@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { 
   Project, 
+  Client,
   ScopePackage, 
   ScopeVersion, 
   WorkOrder, 
@@ -27,11 +28,13 @@ import {
   DollarSign, 
   CheckCircle2, 
   Eye, 
-  FileText
+  FileText,
+  Building2
 } from 'lucide-react';
 
 interface MiddlePanelScopeProps {
   project: Project | null;
+  client?: Client | null;
   packages: ScopePackage[];
   versions: ScopeVersion[];
   workOrders: WorkOrder[];
@@ -46,6 +49,7 @@ interface MiddlePanelScopeProps {
 
 export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
   project,
+  client,
   packages,
   versions,
   workOrders,
@@ -160,6 +164,24 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
             <h2 className="text-base font-bold text-slate-100 truncate max-w-[280px]">
               {project.name}
             </h2>
+
+            {/* Assigned Client Company Profile Badge */}
+            {client ? (
+              <div className="flex items-center gap-1.5 text-xs text-slate-300 mt-1">
+                <Building2 className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                <span className="font-semibold text-slate-100">{client.name}</span>
+                {client.contacts && client.contacts.length > 0 && (
+                  <span className="text-[11px] text-slate-400 truncate max-w-[180px]">
+                    ({client.contacts[0].name})
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div className="text-[11px] text-slate-500 italic mt-0.5">
+                Internal / Unassigned Company
+              </div>
+            )}
+
             <div className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
               <span>Timezone:</span>
               <span className="font-mono text-cyan-300">{project.timezone}</span>

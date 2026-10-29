@@ -37,3 +37,4 @@ SELECT
     (SELECT count(*) FROM scope_versions) AS estimate_version_count,
     (SELECT count(*) FROM work_orders) AS work_order_count,
     (SELECT count(*) FROM audit_events) AS audit_event_count;
+

@@ -13,7 +13,9 @@ import {
   ChevronDown, 
   Plus, 
   Search, 
-  Globe
+  Globe,
+  User,
+  AlertCircle
 } from 'lucide-react';
 
 interface LeftPanelClientsProps {
@@ -47,13 +49,36 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
   const [newClientTz, setNewClientTz] = useState('America/New_York');
   const [newClientNotes, setNewClientNotes] = useState('');
 
+  // Primary Contact states
+  const [newContactName, setNewContactName] = useState('');
+  const [newContactEmail, setNewContactEmail] = useState('');
+  const [newContactTitle, setNewContactTitle] = useState('VP Engineering');
+  const [newContactPhone, setNewContactPhone] = useState('');
+
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectClientId, setNewProjectClientId] = useState(clients[0]?.id || '');
   const [newProjectDesc, setNewProjectDesc] = useState('');
-  const [newProjectTz, setNewProjectTz] = useState('America/New_York');
+  const [newProjectTz, setNewProjectTz] = useState(clients[0]?.default_timezone || 'America/New_York');
 
   const toggleClient = (clientId: string) => {
     setExpandedClients((prev) => ({ ...prev, [clientId]: !prev[clientId] }));
+  };
+
+  const handleOpenProjectModalForClient = (clientId: string) => {
+    setNewProjectClientId(clientId);
+    const target = clients.find((c) => c.id === clientId);
+    if (target) {
+      setNewProjectTz(target.default_timezone);
+    }
+    setIsProjectModalOpen(true);
+  };
+
+  const handleClientSelectionChange = (clientId: string) => {
+    setNewProjectClientId(clientId);
+    const target = clients.find((c) => c.id === clientId);
+    if (target) {
+      setNewProjectTz(target.default_timezone);
+    }
   };
 
   // Filter projects by search
@@ -69,20 +94,42 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
   const handleCreateClientSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newClientName.trim()) return;
+
+    const contacts = newContactName.trim()
+      ? [
+          {
+            id: `contact-${Date.now()}`,
+            client_id: `client-${Date.now()}`,
+            name: newContactName.trim(),
+            email: newContactEmail.trim(),
+            job_title: newContactTitle.trim() || 'Primary Contact',
+            phone: newContactPhone.trim() || undefined,
+            is_primary: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        ]
+      : [];
+
     onCreateClient({
       name: newClientName.trim(),
       default_timezone: newClientTz,
       notes_internal: newClientNotes.trim(),
       status: 'active',
+      contacts,
     });
+
     setNewClientName('');
     setNewClientNotes('');
+    setNewContactName('');
+    setNewContactEmail('');
+    setNewContactPhone('');
     setIsClientModalOpen(false);
   };
 
   const handleCreateProjectSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newProjectName.trim()) return;
+    if (!newProjectName.trim() || !newProjectClientId) return;
     onCreateProject({
       name: newProjectName.trim(),
       client_id: newProjectClientId,
@@ -174,11 +221,31 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
                     <ChevronRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-300 transition" />
                   )}
                   <Building2 className="w-4 h-4 text-teal-400 shrink-0" />
-                  <span className="text-xs font-semibold text-slate-200 truncate">{client.name}</span>
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-slate-200 truncate">{client.name}</div>
+                    {client.contacts && client.contacts.length > 0 && (
+                      <div className="text-[10px] text-slate-500 truncate">
+                        {client.contacts[0].name} {client.contacts[0].email ? `• ${client.contacts[0].email}` : ''}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-mono">
+                <div className="flex items-center gap-1 text-[10px] text-slate-500 font-mono">
                   <Globe className="w-3 h-3 text-slate-600" />
                   <span>{client.default_timezone.split('/')[1] || client.default_timezone}</span>
+                  {canViewMoney && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenProjectModalForClient(client.id);
+                      }}
+                      className="p-1 rounded bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-teal-300 ml-1 transition"
+                      title={`Assign new project to ${client.name}`}
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -260,13 +327,65 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
             </select>
           </div>
 
+          {/* Primary Contact Person Details */}
+          <div className="border border-slate-800/80 rounded-lg p-3 bg-slate-950/70 space-y-3">
+            <div className="text-xs font-semibold text-teal-300 flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5 text-teal-400" />
+              <span>Primary Client Contact Person (Optional)</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[11px] text-slate-400 mb-1">Contact Name</label>
+                <input
+                  type="text"
+                  value={newContactName}
+                  onChange={(e) => setNewContactName(e.target.value)}
+                  placeholder="e.g. Robert Vance"
+                  className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] text-slate-400 mb-1">Business Email</label>
+                <input
+                  type="email"
+                  value={newContactEmail}
+                  onChange={(e) => setNewContactEmail(e.target.value)}
+                  placeholder="e.g. robert@client.com"
+                  className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[11px] text-slate-400 mb-1">Job Title</label>
+                <input
+                  type="text"
+                  value={newContactTitle}
+                  onChange={(e) => setNewContactTitle(e.target.value)}
+                  placeholder="e.g. VP Engineering"
+                  className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] text-slate-400 mb-1">Phone Number</label>
+                <input
+                  type="tel"
+                  value={newContactPhone}
+                  onChange={(e) => setNewContactPhone(e.target.value)}
+                  placeholder="+1 (555) 234-5678"
+                  className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
+                />
+              </div>
+            </div>
+          </div>
+
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1">Internal Notes</label>
+            <label className="block text-xs font-medium text-slate-300 mb-1">Internal Notes & Commercial Terms</label>
             <textarea
-              rows={3}
+              rows={2}
               value={newClientNotes}
               onChange={(e) => setNewClientNotes(e.target.value)}
-              placeholder="Client commercial terms, contacts, or confidentiality notes..."
+              placeholder="Commercial terms, billing preferences, or background..."
               className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
             />
           </div>
@@ -309,20 +428,74 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1">Client Company</label>
-            <select
-              value={newProjectClientId}
-              onChange={(e) => setNewProjectClientId(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
-            >
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {clients.length === 0 ? (
+            <div className="bg-amber-950/40 border border-amber-800 p-3 rounded-lg text-amber-200 text-xs space-y-2">
+              <div className="font-semibold flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 text-amber-400" />
+                <span>No Client Companies Available</span>
+              </div>
+              <p className="text-[11px] text-slate-300">
+                A project must be assigned to a Client Company profile. Please create a Client Company profile first.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsProjectModalOpen(false);
+                  setIsClientModalOpen(true);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs transition"
+              >
+                + Create Client Company Profile First
+              </button>
+            </div>
+          ) : (
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-xs font-medium text-slate-300">
+                  Assign Client & Company Profile
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsProjectModalOpen(false);
+                    setIsClientModalOpen(true);
+                  }}
+                  className="text-xs text-teal-400 hover:underline flex items-center gap-1"
+                >
+                  + Add New Client
+                </button>
+              </div>
+              <select
+                required
+                value={newProjectClientId}
+                onChange={(e) => handleClientSelectionChange(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
+              >
+                <option value="" disabled>-- Select Client Company --</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.default_timezone})
+                  </option>
+                ))}
+              </select>
+
+              {/* Show selected client contact preview */}
+              {(() => {
+                const selectedClient = clients.find((c) => c.id === newProjectClientId);
+                if (selectedClient?.contacts && selectedClient.contacts.length > 0) {
+                  return (
+                    <div className="text-[11px] text-slate-300 mt-1.5 flex items-center gap-1.5 bg-slate-900/80 p-2 rounded border border-slate-800">
+                      <User className="w-3.5 h-3.5 text-teal-400" />
+                      <span>
+                        Assigned Contact: <strong className="text-slate-100">{selectedClient.contacts[0].name}</strong> ({selectedClient.contacts[0].email})
+                      </span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-medium text-slate-300 mb-1">Project Timezone</label>

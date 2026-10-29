@@ -60,6 +60,7 @@ export interface Client {
   created_at: string;
   updated_at: string;
   archived_at?: string | null;
+  contacts?: ClientContact[];
 }
 
 export interface ClientContact {

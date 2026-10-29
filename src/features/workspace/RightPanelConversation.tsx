@@ -2,7 +2,7 @@
 // Right Panel: Project Primary Conversation with rich-text, attachments, dual-time, and Super Admin masking
 
 import React, { useState } from 'react';
-import { Project, SafeMessage, ScopeVersion } from '../../types';
+import { Project, Client, SafeMessage, ScopeVersion } from '../../types';
 import { useAuth } from '../auth/AuthContext';
 import { RichTextEditor } from '../conversations/RichTextEditor';
 import { EstimateConversationCard } from '../conversations/EstimateConversationCard';
@@ -18,11 +18,13 @@ import {
   User, 
   Sparkles,
   FileSpreadsheet,
-  CheckCircle2
+  CheckCircle2,
+  Building2
 } from 'lucide-react';
 
 interface RightPanelConversationProps {
   project: Project | null;
+  client?: Client | null;
   messages: SafeMessage[];
   versions: ScopeVersion[];
   onSendMessage: (contentJson: Record<string, unknown>, attachments: File[]) => void;
@@ -36,6 +38,7 @@ interface RightPanelConversationProps {
 
 export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
   project,
+  client,
   messages,
   versions,
   onSendMessage,
@@ -106,6 +109,15 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
               </span>
             </div>
             <div className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
+              {client && (
+                <>
+                  <span className="flex items-center gap-1 text-slate-200 font-semibold">
+                    <Building2 className="w-3.5 h-3.5 text-teal-400" />
+                    <span>{client.name}</span>
+                  </span>
+                  <span className="text-slate-600">•</span>
+                </>
+              )}
               <span>{project.name}</span>
               <span className="text-slate-600">•</span>
               <span className="font-mono text-cyan-300">{project.timezone}</span>

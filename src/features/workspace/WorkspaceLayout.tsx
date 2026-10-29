@@ -37,7 +37,8 @@ import {
   Globe, 
   Layers, 
   ShieldAlert, 
-  SlidersHorizontal 
+  SlidersHorizontal,
+  Building2
 } from 'lucide-react';
 
 export const WorkspaceLayout: React.FC = () => {
@@ -60,8 +61,11 @@ export const WorkspaceLayout: React.FC = () => {
   const [reviewVersionId, setReviewVersionId] = useState<string | null>(null);
   const [timeCorrectionMessage, setTimeCorrectionMessage] = useState<SafeMessage | null>(null);
 
-  // Active project
+  // Active project and assigned client company
   const activeProject: Project | null = projects.find((p) => p.id === selectedProjectId) || projects[0] || null;
+  const activeClient: Client | null = activeProject?.client_id
+    ? clients.find((c) => c.id === activeProject.client_id) || null
+    : null;
   const activeFinancials = activeProject ? financials[activeProject.id] : undefined;
   const activePackages = activeProject ? packages.filter((p) => p.project_id === activeProject.id) : [];
   const activeVersions = versions.filter((v) =>
@@ -87,10 +91,27 @@ export const WorkspaceLayout: React.FC = () => {
       status: 'active',
       notes_internal: clientData.notes_internal,
       default_timezone: clientData.default_timezone || 'America/New_York',
+      contacts: clientData.contacts || [],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
     setClients((prev) => [...prev, newClient]);
+
+    const auditEntry: AuditEvent = {
+      id: `audit-${Date.now()}`,
+      organization_id: 'org-1',
+      actor_user_id: currentUser.user_id,
+      actor_role_snapshot: currentRole,
+      entity_type: 'clients',
+      entity_id: newClient.id,
+      action: 'CREATE_CLIENT_PROFILE',
+      before_state: null,
+      after_state: { name: newClient.name, timezone: newClient.default_timezone, contacts: newClient.contacts },
+      reason: 'Client company profile created by management',
+      server_recorded_at: new Date().toISOString(),
+      source: 'ui',
+    };
+    setAuditEvents((a) => [auditEntry, ...a]);
   };
 
   const handleCreateProject = (projectData: Partial<Project>) => {
@@ -107,6 +128,45 @@ export const WorkspaceLayout: React.FC = () => {
     };
     setProjects((prev) => [...prev, newProj]);
     setSelectedProjectId(newProj.id);
+
+    // Initialize default project financials for this newly created project
+    setFinancials((prev) => ({
+      ...prev,
+      [newProj.id]: {
+        project_id: newProj.id,
+        internal_budget_hours: 100,
+        internal_budget_amount_usd: 5000,
+        internal_budget_amount_bdt: 600000,
+        internal_cost_rate_usd_per_hour: 25,
+        internal_cost_rate_bdt_per_hour: 3000,
+        client_rate_usd_per_hour: 50,
+        client_rate_bdt_per_hour: 6000,
+        currency_rate_mode: 'independent_rates',
+        updated_at: new Date().toISOString(),
+      },
+    }));
+
+    const assignedClient = clients.find((c) => c.id === projectData.client_id);
+    const auditEntry: AuditEvent = {
+      id: `audit-${Date.now()}`,
+      organization_id: 'org-1',
+      actor_user_id: currentUser.user_id,
+      actor_role_snapshot: currentRole,
+      entity_type: 'projects',
+      entity_id: newProj.id,
+      action: 'CREATE_PROJECT',
+      before_state: null,
+      after_state: {
+        name: newProj.name,
+        assigned_client_id: newProj.client_id,
+        assigned_client_name: assignedClient?.name || 'Unassigned',
+        timezone: newProj.timezone,
+      },
+      reason: 'Project initialized and assigned to client company',
+      server_recorded_at: new Date().toISOString(),
+      source: 'ui',
+    };
+    setAuditEvents((a) => [auditEntry, ...a]);
   };
 
   const handleSendMessage = (contentJson: Record<string, unknown>, attachments: File[]) => {
@@ -577,6 +637,12 @@ export const WorkspaceLayout: React.FC = () => {
 
           {/* Active project quick badge */}
           <div className="flex items-center gap-2 text-xs text-slate-400">
+            {activeClient && (
+              <span className="flex items-center gap-1 text-slate-400">
+                <span className="font-semibold text-teal-400">{activeClient.name}</span>
+                <span className="text-slate-600">/</span>
+              </span>
+            )}
             <span>Project:</span>
             <span className="font-semibold text-slate-200">
               {activeProject ? activeProject.name : 'No project selected'}
@@ -666,6 +732,7 @@ export const WorkspaceLayout: React.FC = () => {
         {/* Panel 2: Scope, Estimates, Work Orders (Middle) */}
         <MiddlePanelScope
           project={activeProject}
+          client={activeClient}
           packages={activePackages}
           versions={activeVersions}
           workOrders={activeWorkOrders}
@@ -681,6 +748,7 @@ export const WorkspaceLayout: React.FC = () => {
         {/* Panel 3: Conversation (Right) */}
         <RightPanelConversation
           project={activeProject}
+          client={activeClient}
           messages={messages}
           versions={versions}
           onSendMessage={handleSendMessage}
