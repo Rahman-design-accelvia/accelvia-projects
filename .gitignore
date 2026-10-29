@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+.parcel-cache/
+coverage/
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+env_2026
+
+# Supabase local runtime
+.supabase/
+supabase/.temp/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
