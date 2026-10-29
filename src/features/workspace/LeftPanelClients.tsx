@@ -15,7 +15,8 @@ import {
   Search, 
   Globe,
   User,
-  AlertCircle
+  AlertCircle,
+  X
 } from 'lucide-react';
 
 interface LeftPanelClientsProps {
@@ -25,6 +26,7 @@ interface LeftPanelClientsProps {
   onSelectProject: (projectId: string) => void;
   onCreateClient: (clientData: Partial<Client>) => void;
   onCreateProject: (projectData: Partial<Project>) => void;
+  onCloseMobileDrawer?: () => void;
 }
 
 export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
@@ -34,6 +36,7 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
   onSelectProject,
   onCreateClient,
   onCreateProject,
+  onCloseMobileDrawer,
 }) => {
   const { canViewMoney, isMember } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
@@ -143,9 +146,9 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
   };
 
   return (
-    <div className="w-80 h-full flex flex-col bg-slate-950 border-r border-slate-800/80 select-none">
+    <div className="w-full lg:w-60 xl:w-64 2xl:w-80 h-full flex flex-col bg-slate-950 lg:border-r border-slate-800/80 select-none shrink-0 min-w-0">
       {/* Top Header */}
-      <div className="p-4 border-b border-slate-800/80 flex items-center justify-between bg-slate-950/80">
+      <div className="p-3 sm:p-4 border-b border-slate-800/80 flex items-center justify-between bg-slate-950/80">
         <div>
           <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
             Clients & Projects
@@ -155,25 +158,36 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
           </div>
         </div>
 
-        {canViewMoney && (
-          <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1">
+          {canViewMoney && (
+            <>
+              <button
+                onClick={() => setIsClientModalOpen(true)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-teal-300 hover:bg-slate-900 transition"
+                title="Add Client Company"
+              >
+                <Building2 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setIsProjectModalOpen(true)}
+                className="p-1.5 rounded-lg bg-teal-500/10 text-teal-400 hover:bg-teal-500/20 transition flex items-center gap-1 text-xs px-2"
+                title="Create New Project"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Project</span>
+              </button>
+            </>
+          )}
+          {onCloseMobileDrawer && (
             <button
-              onClick={() => setIsClientModalOpen(true)}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-teal-300 hover:bg-slate-900 transition"
-              title="Add Client Company"
+              onClick={onCloseMobileDrawer}
+              className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-900 transition ml-1"
+              title="Close drawer"
             >
-              <Building2 className="w-4 h-4" />
+              <X className="w-4 h-4" />
             </button>
-            <button
-              onClick={() => setIsProjectModalOpen(true)}
-              className="p-1.5 rounded-lg bg-teal-500/10 text-teal-400 hover:bg-teal-500/20 transition flex items-center gap-1 text-xs px-2"
-              title="Create New Project"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Project</span>
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Search Bar */}
@@ -262,7 +276,10 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
                       return (
                         <div
                           key={proj.id}
-                          onClick={() => onSelectProject(proj.id)}
+                          onClick={() => {
+                            onSelectProject(proj.id);
+                            if (onCloseMobileDrawer) onCloseMobileDrawer();
+                          }}
                           className={`flex items-center justify-between px-2.5 py-2 rounded-lg cursor-pointer text-xs transition ${
                             isSelected
                               ? 'bg-teal-500/15 border border-teal-500/30 text-teal-200 font-medium'

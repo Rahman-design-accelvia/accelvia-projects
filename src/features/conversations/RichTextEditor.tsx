@@ -131,11 +131,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   return (
     <div className="border border-slate-800 bg-slate-900/90 rounded-xl overflow-hidden focus-within:border-teal-500/50 transition">
       {/* Formatting Toolbar */}
-      <div className="flex flex-wrap items-center gap-1 px-3 py-2 border-b border-slate-800/80 bg-slate-950/40 text-slate-400">
+      <div className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 border-b border-slate-800/80 bg-slate-950/40 text-slate-400 overflow-x-auto no-scrollbar">
         <button
           type="button"
           onClick={() => editor?.chain().focus().toggleBold().run()}
-          className={`p-1.5 rounded hover:bg-slate-800 hover:text-slate-200 transition ${
+          className={`p-1.5 rounded hover:bg-slate-800 hover:text-slate-200 transition shrink-0 ${
             editor?.isActive('bold') ? 'bg-slate-800 text-teal-400' : ''
           }`}
           title="Bold (Ctrl+B)"
@@ -145,7 +145,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         <button
           type="button"
           onClick={() => editor?.chain().focus().toggleItalic().run()}
-          className={`p-1.5 rounded hover:bg-slate-800 hover:text-slate-200 transition ${
+          className={`p-1.5 rounded hover:bg-slate-800 hover:text-slate-200 transition shrink-0 ${
             editor?.isActive('italic') ? 'bg-slate-800 text-teal-400' : ''
           }`}
           title="Italic (Ctrl+I)"
@@ -155,7 +155,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         <button
           type="button"
           onClick={() => editor?.chain().focus().toggleUnderline().run()}
-          className={`p-1.5 rounded hover:bg-slate-800 hover:text-slate-200 transition ${
+          className={`p-1.5 rounded hover:bg-slate-800 hover:text-slate-200 transition shrink-0 ${
             editor?.isActive('underline') ? 'bg-slate-800 text-teal-400' : ''
           }`}
           title="Underline (Ctrl+U)"
@@ -163,12 +163,12 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           <UnderlineIcon className="w-4 h-4" />
         </button>
 
-        <span className="w-px h-4 bg-slate-800 mx-1" />
+        <span className="w-px h-4 bg-slate-800 mx-1 shrink-0" />
 
         <button
           type="button"
           onClick={() => editor?.chain().focus().toggleBulletList().run()}
-          className={`p-1.5 rounded hover:bg-slate-800 hover:text-slate-200 transition ${
+          className={`p-1.5 rounded hover:bg-slate-800 hover:text-slate-200 transition shrink-0 ${
             editor?.isActive('bulletList') ? 'bg-slate-800 text-teal-400' : ''
           }`}
           title="Bullet List"
@@ -178,7 +178,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         <button
           type="button"
           onClick={() => editor?.chain().focus().toggleOrderedList().run()}
-          className={`p-1.5 rounded hover:bg-slate-800 hover:text-slate-200 transition ${
+          className={`p-1.5 rounded hover:bg-slate-800 hover:text-slate-200 transition shrink-0 ${
             editor?.isActive('orderedList') ? 'bg-slate-800 text-teal-400' : ''
           }`}
           title="Numbered List"
@@ -188,13 +188,13 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         <button
           type="button"
           onClick={insertTable}
-          className="p-1.5 rounded hover:bg-slate-800 hover:text-slate-200 transition"
+          className="p-1.5 rounded hover:bg-slate-800 hover:text-slate-200 transition shrink-0"
           title="Insert Table"
         >
           <TableIcon className="w-4 h-4" />
         </button>
 
-        <span className="w-px h-4 bg-slate-800 mx-1" />
+        <span className="w-px h-4 bg-slate-800 mx-1 shrink-0" />
 
         {/* Attachment button */}
         <input
@@ -208,14 +208,14 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="p-1.5 rounded hover:bg-slate-800 hover:text-slate-200 transition flex items-center gap-1 text-xs"
+          className="p-1.5 rounded hover:bg-slate-800 hover:text-slate-200 transition flex items-center gap-1 text-xs shrink-0"
           title="Attach Image (max 10MB) or Video (max 50MB)"
         >
           <Paperclip className="w-4 h-4" />
           <span>Attach</span>
         </button>
 
-        <div className="ml-auto text-xs text-slate-500 font-mono">
+        <div className="hidden sm:block ml-auto text-xs text-slate-500 font-mono shrink-0">
           Ctrl+Enter to send
         </div>
       </div>
@@ -262,15 +262,15 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       )}
 
       {/* Action Footer */}
-      <div className="px-3 py-2 border-t border-slate-800/80 bg-slate-950/60 flex items-center justify-between">
-        <div className="text-[11px] text-slate-500">
+      <div className="px-3 py-2 border-t border-slate-800/80 bg-slate-950/60 flex items-center justify-between gap-2">
+        <div className="hidden sm:block text-[11px] text-slate-500 truncate">
           Paste tables, bold, and links cleanly • Source theme backgrounds are automatically removed
         </div>
         <button
           type="button"
           onClick={handleSend}
           disabled={disabled}
-          className="inline-flex items-center gap-1.5 bg-teal-500 hover:bg-teal-400 text-slate-950 font-semibold px-4 py-1.5 rounded-lg text-xs transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-teal-950"
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 bg-teal-500 hover:bg-teal-400 text-slate-950 font-semibold px-4 py-2 sm:py-1.5 rounded-lg text-xs transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-teal-950 active:scale-95 shrink-0"
         >
           <Send className="w-3.5 h-3.5" />
           <span>Send Message</span>

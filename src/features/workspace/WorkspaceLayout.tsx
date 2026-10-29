@@ -30,6 +30,7 @@ import {
   SEED_FINANCIALS,
 } from '../../lib/supabase/client';
 import { formatDualTime } from '../../lib/timezone';
+import { calculateProjectApprovedHours } from '../../lib/state-machines';
 import { 
   ShieldCheck, 
   UserCheck, 
@@ -38,7 +39,13 @@ import {
   Layers, 
   ShieldAlert, 
   SlidersHorizontal,
-  Building2
+  Building2,
+  Menu,
+  X,
+  FolderKanban,
+  MessageSquare,
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react';
 
 export const WorkspaceLayout: React.FC = () => {
@@ -61,6 +68,12 @@ export const WorkspaceLayout: React.FC = () => {
   const [reviewVersionId, setReviewVersionId] = useState<string | null>(null);
   const [timeCorrectionMessage, setTimeCorrectionMessage] = useState<SafeMessage | null>(null);
 
+  // Responsive view & collapsible panel state
+  const [mobileTab, setMobileTab] = useState<'projects' | 'scope' | 'chat'>('chat');
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+  const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false);
+  const [isScopePanelCollapsed, setIsScopePanelCollapsed] = useState(false);
+
   // Active project and assigned client company
   const activeProject: Project | null = projects.find((p) => p.id === selectedProjectId) || projects[0] || null;
   const activeClient: Client | null = activeProject?.client_id
@@ -72,6 +85,19 @@ export const WorkspaceLayout: React.FC = () => {
     activePackages.some((pkg) => pkg.id === v.scope_package_id)
   );
   const activeWorkOrders = activeProject ? workOrders.filter((wo) => wo.project_id === activeProject.id) : [];
+
+  // Authoritative approved hours for mobile badge
+  const packagesWithVersions = activePackages.map((pkg) => ({
+    ...pkg,
+    versions: versions.filter((v) => v.scope_package_id === pkg.id),
+  }));
+  const totalApprovedHours = calculateProjectApprovedHours(packagesWithVersions);
+
+  const handleSelectProject = (projectId: string) => {
+    setSelectedProjectId(projectId);
+    setMobileTab('chat');
+    setIsMobileDrawerOpen(false);
+  };
 
   // Live Bangladesh & Local clock in top nav
   const [currentTimeInstant, setCurrentTimeInstant] = useState(new Date());
@@ -621,37 +647,66 @@ export const WorkspaceLayout: React.FC = () => {
   return (
     <div className="h-screen w-screen flex flex-col bg-slate-950 overflow-hidden text-slate-100">
       {/* Top Application Bar */}
-      <header className="h-14 bg-slate-950 border-b border-slate-800 flex items-center justify-between px-4 z-20 shrink-0">
-        {/* Brand & Identity */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-teal-500 flex items-center justify-center font-bold text-slate-950 shadow-md shadow-teal-950">
+      <header className="h-14 bg-slate-950 border-b border-slate-800 flex items-center justify-between px-3 sm:px-4 z-20 shrink-0">
+        {/* Brand & Left Navigation Controls */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          {/* Mobile Navigation Drawer Toggle */}
+          <button
+            type="button"
+            onClick={() => setIsMobileDrawerOpen(true)}
+            className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-900 transition shrink-0"
+            title="Open Projects & Clients Drawer"
+            aria-label="Open navigation drawer"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+
+          {/* Desktop Left Sidebar Toggle (Optimizes space on 13" laptops) */}
+          <button
+            type="button"
+            onClick={() => setIsLeftPanelCollapsed(!isLeftPanelCollapsed)}
+            className="hidden lg:flex p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-900 transition shrink-0"
+            title={isLeftPanelCollapsed ? "Expand Projects Panel" : "Collapse Projects Panel"}
+          >
+            {isLeftPanelCollapsed ? (
+              <PanelLeftOpen className="w-4 h-4 text-teal-400" />
+            ) : (
+              <PanelLeftClose className="w-4 h-4" />
+            )}
+          </button>
+
+          {/* Brand Logo */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-teal-500 flex items-center justify-center font-bold text-slate-950 shadow-md shadow-teal-950 text-xs sm:text-sm">
               A
             </div>
-            <span className="font-bold tracking-tight text-sm text-slate-100">
-              ACCELVIA <span className="text-teal-400 font-mono text-xs">WMS</span>
+            <span className="hidden sm:inline font-bold tracking-tight text-xs sm:text-sm text-slate-100">
+              ACCELVIA <span className="text-teal-400 font-mono text-[10px] sm:text-xs">WMS</span>
             </span>
           </div>
 
-          <span className="h-4 w-px bg-slate-800" />
+          <span className="h-4 w-px bg-slate-800 hidden sm:block shrink-0" />
 
-          {/* Active project quick badge */}
-          <div className="flex items-center gap-2 text-xs text-slate-400">
+          {/* Active Project & Assigned Client Breadcrumb */}
+          <div className="flex items-center gap-1.5 text-xs text-slate-400 min-w-0">
             {activeClient && (
-              <span className="flex items-center gap-1 text-slate-400">
-                <span className="font-semibold text-teal-400">{activeClient.name}</span>
+              <span className="flex items-center gap-1 text-slate-400 min-w-0 truncate">
+                <span className="font-semibold text-teal-400 truncate max-w-[80px] sm:max-w-[130px]">
+                  {activeClient.name}
+                </span>
                 <span className="text-slate-600">/</span>
               </span>
             )}
-            <span>Project:</span>
-            <span className="font-semibold text-slate-200">
+            <span className="hidden sm:inline shrink-0">Project:</span>
+            <span className="font-semibold text-slate-200 truncate max-w-[100px] sm:max-w-[180px] md:max-w-[240px]">
               {activeProject ? activeProject.name : 'No project selected'}
             </span>
           </div>
         </div>
 
         {/* Center Live Dual-Time Indicator */}
-        <div className="hidden lg:flex items-center gap-4 text-xs font-mono bg-slate-900/90 border border-slate-800/80 px-3 py-1 rounded-full text-slate-300">
+        {/* Full display for 15"+ laptop screens (xl and 2xl) */}
+        <div className="hidden xl:flex items-center gap-4 text-xs font-mono bg-slate-900/90 border border-slate-800/80 px-3 py-1 rounded-full text-slate-300 shrink-0">
           <div className="flex items-center gap-1.5">
             <Globe className="w-3.5 h-3.5 text-cyan-400" />
             <span>Project ({topDualTime.clientTzAbbrev}):</span>
@@ -665,11 +720,24 @@ export const WorkspaceLayout: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Section: Role Switcher & Profile */}
-        <div className="flex items-center gap-3">
-          {/* Developer Role Switcher (Crucial for testing all permission invariants) */}
-          <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1 text-xs">
-            <span className="text-[10px] uppercase font-bold text-slate-500 px-1.5">Role:</span>
+        {/* Compact display for tablet / 13" laptop (md to xl) */}
+        <div className="hidden md:flex xl:hidden items-center gap-2 text-xs font-mono bg-slate-900/90 border border-slate-800/80 px-2.5 py-1 rounded-full text-slate-300 shrink-0">
+          <span className="text-cyan-300 font-semibold">{topDualTime.clientTzAbbrev}: {topDualTime.clientTime}</span>
+          <span className="text-slate-600">•</span>
+          <span className="text-teal-300 font-semibold">BST: {topDualTime.bangladeshTime}</span>
+        </div>
+
+        {/* Mobile Mini Clock chip (< md) */}
+        <div className="flex md:hidden items-center gap-1 text-[11px] font-mono bg-slate-900/90 border border-slate-800/80 px-2 py-0.5 rounded-full text-teal-300 shrink-0">
+          <Clock className="w-3 h-3 text-teal-400" />
+          <span>{topDualTime.bangladeshTime}</span>
+        </div>
+
+        {/* Right Section: Role Switcher & User Profile */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* Desktop/Tablet segmented role buttons */}
+          <div className="hidden sm:flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1 text-xs">
+            <span className="text-[10px] uppercase font-bold text-slate-500 px-1.5 hidden md:inline">Role:</span>
             <button
               onClick={() => setRole('super_admin')}
               className={`px-2 py-0.5 rounded font-semibold text-xs transition ${
@@ -702,13 +770,32 @@ export const WorkspaceLayout: React.FC = () => {
             </button>
           </div>
 
+          {/* Mobile Role Switcher Select (< sm) */}
+          <div className="sm:hidden">
+            <select
+              value={currentRole}
+              onChange={(e) => setRole(e.target.value as any)}
+              className={`text-[11px] font-bold rounded-lg px-2 py-1 border focus:outline-none ${
+                currentRole === 'super_admin'
+                  ? 'bg-amber-950/80 text-amber-300 border-amber-500/50'
+                  : currentRole === 'admin'
+                  ? 'bg-teal-950/80 text-teal-300 border-teal-500/50'
+                  : 'bg-blue-950/80 text-blue-300 border-blue-500/50'
+              }`}
+            >
+              <option value="super_admin" className="bg-slate-900 text-slate-100">Super Admin</option>
+              <option value="admin" className="bg-slate-900 text-slate-100">Admin</option>
+              <option value="member" className="bg-slate-900 text-slate-100">Member</option>
+            </select>
+          </div>
+
           {/* User Profile Pill */}
-          <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
-            <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-teal-400">
+          <div className="flex items-center gap-2 pl-1.5 sm:pl-2 border-l border-slate-800">
+            <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-teal-400 shrink-0">
               {currentUser.display_name.charAt(0)}
             </div>
-            <div className="hidden sm:block text-left text-xs">
-              <div className="font-semibold text-slate-200 leading-none">
+            <div className="hidden lg:block text-left text-xs">
+              <div className="font-semibold text-slate-200 leading-none truncate max-w-[90px]">
                 {currentUser.display_name}
               </div>
               <div className="text-[10px] text-slate-500 capitalize">{currentRole.replace('_', ' ')}</div>
@@ -717,33 +804,37 @@ export const WorkspaceLayout: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Three-Panel Area */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Main Three-Panel Area (Desktop & 13"+ Laptops: lg screen and above) */}
+      <div className="flex-1 hidden lg:flex overflow-hidden">
         {/* Panel 1: Clients & Projects (Left) */}
-        <LeftPanelClients
-          clients={clients}
-          projects={projects}
-          selectedProjectId={selectedProjectId}
-          onSelectProject={(id) => setSelectedProjectId(id)}
-          onCreateClient={handleCreateClient}
-          onCreateProject={handleCreateProject}
-        />
+        {!isLeftPanelCollapsed && (
+          <LeftPanelClients
+            clients={clients}
+            projects={projects}
+            selectedProjectId={selectedProjectId}
+            onSelectProject={handleSelectProject}
+            onCreateClient={handleCreateClient}
+            onCreateProject={handleCreateProject}
+          />
+        )}
 
         {/* Panel 2: Scope, Estimates, Work Orders (Middle) */}
-        <MiddlePanelScope
-          project={activeProject}
-          client={activeClient}
-          packages={activePackages}
-          versions={activeVersions}
-          workOrders={activeWorkOrders}
-          financialSettings={activeFinancials}
-          onUpdateFinancials={handleUpdateFinancials}
-          onCreateEstimateDraft={handleCreateEstimateDraft}
-          onSendEstimate={handleSendEstimate}
-          onGenerateWorkOrder={handleGenerateWorkOrder}
-          onUpdateWorkOrderStatus={handleUpdateWorkOrderStatus}
-          onOpenClientReviewModal={(vId) => setReviewVersionId(vId)}
-        />
+        {!isScopePanelCollapsed && (
+          <MiddlePanelScope
+            project={activeProject}
+            client={activeClient}
+            packages={activePackages}
+            versions={activeVersions}
+            workOrders={activeWorkOrders}
+            financialSettings={activeFinancials}
+            onUpdateFinancials={handleUpdateFinancials}
+            onCreateEstimateDraft={handleCreateEstimateDraft}
+            onSendEstimate={handleSendEstimate}
+            onGenerateWorkOrder={handleGenerateWorkOrder}
+            onUpdateWorkOrderStatus={handleUpdateWorkOrderStatus}
+            onOpenClientReviewModal={(vId) => setReviewVersionId(vId)}
+          />
+        )}
 
         {/* Panel 3: Conversation (Right) */}
         <RightPanelConversation
@@ -760,6 +851,142 @@ export const WorkspaceLayout: React.FC = () => {
           onOpenCorrectTimeModal={(msg) => setTimeCorrectionMessage(msg)}
         />
       </div>
+
+      {/* Mobile & Tablet App Screen Views (Under lg: Single active screen with native bottom navigation) */}
+      <div className="flex-1 flex flex-col lg:hidden overflow-hidden">
+        {mobileTab === 'projects' && (
+          <LeftPanelClients
+            clients={clients}
+            projects={projects}
+            selectedProjectId={selectedProjectId}
+            onSelectProject={handleSelectProject}
+            onCreateClient={handleCreateClient}
+            onCreateProject={handleCreateProject}
+          />
+        )}
+
+        {mobileTab === 'scope' && (
+          <MiddlePanelScope
+            project={activeProject}
+            client={activeClient}
+            packages={activePackages}
+            versions={activeVersions}
+            workOrders={activeWorkOrders}
+            financialSettings={activeFinancials}
+            onUpdateFinancials={handleUpdateFinancials}
+            onCreateEstimateDraft={handleCreateEstimateDraft}
+            onSendEstimate={handleSendEstimate}
+            onGenerateWorkOrder={handleGenerateWorkOrder}
+            onUpdateWorkOrderStatus={handleUpdateWorkOrderStatus}
+            onOpenClientReviewModal={(vId) => setReviewVersionId(vId)}
+            onBackToProjects={() => setMobileTab('projects')}
+          />
+        )}
+
+        {mobileTab === 'chat' && (
+          <RightPanelConversation
+            project={activeProject}
+            client={activeClient}
+            messages={messages}
+            versions={versions}
+            onSendMessage={handleSendMessage}
+            onEditMessage={handleEditMessage}
+            onDeleteMessage={handleDeleteMessage}
+            onApproveEstimate={handleApproveEstimateFromConversation}
+            onOpenAuditConsole={() => setIsAuditModalOpen(true)}
+            onOpenEstimateDraftModal={() => handleCreateEstimateDraft(null, 'New Estimate Scope', [])}
+            onOpenCorrectTimeModal={(msg) => setTimeCorrectionMessage(msg)}
+            onBackToProjects={() => setMobileTab('projects')}
+          />
+        )}
+      </div>
+
+      {/* Mobile App Native Bottom Navigation Bar */}
+      <nav className="lg:hidden h-16 bg-slate-950/95 backdrop-blur-md border-t border-slate-800/80 flex items-center justify-around px-2 z-20 pb-safe shrink-0 select-none">
+        {/* Projects Tab */}
+        <button
+          type="button"
+          onClick={() => setMobileTab('projects')}
+          className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition ${
+            mobileTab === 'projects'
+              ? 'text-teal-400 font-bold'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <div className="relative">
+            <FolderKanban className={`w-5 h-5 ${mobileTab === 'projects' ? 'text-teal-400 stroke-[2.5]' : ''}`} />
+            {projects.length > 0 && (
+              <span className="absolute -top-1 -right-2.5 bg-slate-800 text-slate-300 text-[10px] font-mono px-1 rounded-full border border-slate-700">
+                {projects.length}
+              </span>
+            )}
+          </div>
+          <span className="text-[11px] mt-1">Projects</span>
+        </button>
+
+        {/* Scope Tab */}
+        <button
+          type="button"
+          onClick={() => setMobileTab('scope')}
+          className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition ${
+            mobileTab === 'scope'
+              ? 'text-teal-400 font-bold'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <div className="relative">
+            <Layers className={`w-5 h-5 ${mobileTab === 'scope' ? 'text-teal-400 stroke-[2.5]' : ''}`} />
+            {totalApprovedHours > 0 && (
+              <span className="absolute -top-1 -right-3 bg-emerald-950 text-emerald-400 text-[10px] font-mono px-1 rounded-full border border-emerald-800">
+                {totalApprovedHours}h
+              </span>
+            )}
+          </div>
+          <span className="text-[11px] mt-1">Scope</span>
+        </button>
+
+        {/* Conversation / Chat Tab */}
+        <button
+          type="button"
+          onClick={() => setMobileTab('chat')}
+          className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition ${
+            mobileTab === 'chat'
+              ? 'text-teal-400 font-bold'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <div className="relative">
+            <MessageSquare className={`w-5 h-5 ${mobileTab === 'chat' ? 'text-teal-400 stroke-[2.5]' : ''}`} />
+            {messages.length > 0 && (
+              <span className="absolute -top-1 -right-2.5 bg-teal-950 text-teal-400 text-[10px] font-mono px-1 rounded-full border border-teal-800">
+                {messages.length}
+              </span>
+            )}
+          </div>
+          <span className="text-[11px] mt-1">Chat</span>
+        </button>
+      </nav>
+
+      {/* Slide-over Mobile Drawer for Quick Project Switching */}
+      {isMobileDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex lg:hidden">
+          <div
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity"
+            onClick={() => setIsMobileDrawerOpen(false)}
+          />
+          <div className="relative w-80 max-w-[85vw] h-full bg-slate-950 shadow-2xl z-10 flex flex-col">
+            <LeftPanelClients
+              clients={clients}
+              projects={projects}
+              selectedProjectId={selectedProjectId}
+              onSelectProject={handleSelectProject}
+              onCreateClient={handleCreateClient}
+              onCreateProject={handleCreateProject}
+              onCloseMobileDrawer={() => setIsMobileDrawerOpen(false)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Super Admin Audit Console Modal */}
       {isSuperAdmin && (

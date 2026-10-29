@@ -19,7 +19,8 @@ import {
   Sparkles,
   FileSpreadsheet,
   CheckCircle2,
-  Building2
+  Building2,
+  ChevronLeft
 } from 'lucide-react';
 
 interface RightPanelConversationProps {
@@ -34,6 +35,7 @@ interface RightPanelConversationProps {
   onOpenAuditConsole: () => void;
   onOpenEstimateDraftModal: () => void;
   onOpenCorrectTimeModal: (message: SafeMessage) => void;
+  onBackToProjects?: () => void;
 }
 
 export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
@@ -48,6 +50,7 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
   onOpenAuditConsole,
   onOpenEstimateDraftModal,
   onOpenCorrectTimeModal,
+  onBackToProjects,
 }) => {
   const { currentUser, isSuperAdmin, isMember, canViewMoney } = useAuth();
 
@@ -83,7 +86,7 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
 
   if (!project) {
     return (
-      <div className="flex-1 h-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center text-slate-500">
+      <div className="w-full lg:flex-1 h-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center text-slate-500">
         <MessageSquare className="w-12 h-12 text-slate-800 mb-3" />
         <h3 className="text-sm font-bold text-slate-300">No Conversation Active</h3>
         <p className="text-xs text-slate-500 mt-1 max-w-xs">
@@ -94,64 +97,76 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
   }
 
   return (
-    <div className="flex-1 h-full flex flex-col bg-slate-950 overflow-hidden">
+    <div className="w-full lg:flex-1 h-full flex flex-col bg-slate-950 overflow-hidden min-w-0">
       {/* Conversation Top Header */}
-      <div className="px-6 py-4 border-b border-slate-800/80 bg-slate-950/80 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400">
-            <MessageSquare className="w-5 h-5" />
+      <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-slate-800/80 bg-slate-950/80 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          {onBackToProjects && (
+            <button
+              onClick={onBackToProjects}
+              className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-900 transition shrink-0"
+              title="Back to projects"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          )}
+          <div className="p-1.5 sm:p-2 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 shrink-0">
+            <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-bold text-slate-100">Project Conversation</h2>
-              <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-teal-950/80 text-teal-300 border border-teal-800/60">
+              <h2 className="text-xs sm:text-sm font-bold text-slate-100 truncate">Project Conversation</h2>
+              <span className="hidden sm:inline-block text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-teal-950/80 text-teal-300 border border-teal-800/60 shrink-0">
                 Primary Thread
               </span>
             </div>
-            <div className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
+            <div className="text-[11px] sm:text-xs text-slate-400 flex items-center gap-1.5 sm:gap-2 mt-0.5 truncate">
               {client && (
                 <>
-                  <span className="flex items-center gap-1 text-slate-200 font-semibold">
-                    <Building2 className="w-3.5 h-3.5 text-teal-400" />
-                    <span>{client.name}</span>
+                  <span className="flex items-center gap-1 text-slate-200 font-semibold truncate">
+                    <Building2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-teal-400 shrink-0" />
+                    <span className="truncate">{client.name}</span>
                   </span>
                   <span className="text-slate-600">•</span>
                 </>
               )}
-              <span>{project.name}</span>
-              <span className="text-slate-600">•</span>
-              <span className="font-mono text-cyan-300">{project.timezone}</span>
+              <span className="truncate">{project.name}</span>
+              <span className="text-slate-600 hidden md:inline">•</span>
+              <span className="font-mono text-cyan-300 hidden md:inline truncate">{project.timezone}</span>
             </div>
           </div>
         </div>
 
         {/* Action Toolbar */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {canViewMoney && (
             <button
               onClick={onOpenEstimateDraftModal}
-              className="px-3 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 text-xs font-semibold flex items-center gap-1.5 transition"
+              className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 text-xs font-semibold flex items-center gap-1 sm:gap-1.5 transition"
+              title="Create new scope estimate"
             >
-              <FileSpreadsheet className="w-4 h-4" />
-              <span>Create Estimate</span>
+              <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Create Estimate</span>
+              <span className="sm:hidden text-[11px]">Estimate</span>
             </button>
           )}
 
           {isSuperAdmin && (
             <button
               onClick={onOpenAuditConsole}
-              className="px-3 py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-semibold flex items-center gap-1.5 transition"
+              className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-semibold flex items-center gap-1 sm:gap-1.5 transition"
               title="Super Admin Private Audit Console"
             >
-              <ShieldAlert className="w-4 h-4 text-indigo-400" />
-              <span>Audit Console</span>
+              <ShieldAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400" />
+              <span className="hidden sm:inline">Audit Console</span>
+              <span className="sm:hidden text-[11px]">Audit</span>
             </button>
           )}
         </div>
       </div>
 
       {/* Message Feed Area */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 space-y-3 sm:space-y-4">
         {messages.length === 0 ? (
           <div className="text-center py-16 text-slate-500 space-y-2">
             <MessageSquare className="w-8 h-8 mx-auto text-slate-700" />
@@ -308,7 +323,7 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
       </div>
 
       {/* Message Input Composer */}
-      <div className="p-4 border-t border-slate-800/80 bg-slate-950/80">
+      <div className="p-2.5 sm:p-4 border-t border-slate-800/80 bg-slate-950/80">
         <RichTextEditor onSendMessage={onSendMessage} />
       </div>
 

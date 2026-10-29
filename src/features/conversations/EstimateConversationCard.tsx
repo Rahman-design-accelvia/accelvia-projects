@@ -64,8 +64,8 @@ export const EstimateConversationCard: React.FC<EstimateConversationCardProps> =
   return (
     <div className={`rounded-xl overflow-hidden transition-all duration-300 my-2.5 ${containerClasses}`}>
       {/* Special Top Tab Banner */}
-      <div className={`px-4 py-2 flex items-center justify-between text-xs font-semibold tracking-wide ${tabHeaderColor}`}>
-        <div className="flex items-center gap-2">
+      <div className={`px-3 sm:px-4 py-2 flex items-center justify-between text-xs font-semibold tracking-wide ${tabHeaderColor}`}>
+        <div className="flex items-center gap-2 min-w-0 pr-2">
           {isApproved ? (
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           ) : isPending ? (
@@ -73,16 +73,16 @@ export const EstimateConversationCard: React.FC<EstimateConversationCardProps> =
           ) : (
             <FileSpreadsheet className="w-4 h-4 text-slate-400 shrink-0" />
           )}
-          <span className="uppercase text-[11px] font-bold">
+          <span className="uppercase text-[10px] sm:text-[11px] font-bold truncate">
             {isApproved
               ? 'Authorized Estimate Scope • Approved'
               : isPending
-              ? 'Active Estimate Scope Proposal • Pending Approval'
+              ? 'Active Estimate Scope Proposal • Pending'
               : `Estimate Scope • ${version.status}`}
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <StatusBadge status={version.status} size="sm" />
           <button
             type="button"
@@ -95,12 +95,12 @@ export const EstimateConversationCard: React.FC<EstimateConversationCardProps> =
       </div>
 
       {/* Main Card Content */}
-      <div className="p-4 space-y-3.5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-sm font-bold text-slate-100 flex items-center gap-2">
-              <span>{packageTitle}</span>
-              <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+      <div className="p-3 sm:p-4 space-y-3">
+        <div className="flex items-start justify-between gap-3 sm:gap-4">
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-slate-100 flex items-center gap-2 flex-wrap">
+              <span className="truncate">{packageTitle}</span>
+              <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
                 v{version.version_number}.0
               </span>
             </div>
@@ -112,9 +112,9 @@ export const EstimateConversationCard: React.FC<EstimateConversationCardProps> =
           </div>
 
           {/* Prominent Hours Metric */}
-          <div className="text-right shrink-0 bg-slate-950/80 px-3 py-2 rounded-lg border border-slate-800/80">
+          <div className="text-right shrink-0 bg-slate-950/80 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-slate-800/80">
             <div className="text-[10px] uppercase font-semibold text-slate-400">Total Scope</div>
-            <div className="text-base font-bold font-mono text-teal-300">
+            <div className="text-sm sm:text-base font-bold font-mono text-teal-300">
               {formatHours(version.total_hours_snapshot)}
             </div>
           </div>
@@ -122,7 +122,7 @@ export const EstimateConversationCard: React.FC<EstimateConversationCardProps> =
 
         {/* Monetary Totals Bar (Only for Super Admin and Admin) */}
         {canViewMoney && version.total_usd_snapshot != null && (
-          <div className="flex items-center justify-between text-xs font-mono bg-slate-950/90 px-3 py-2 rounded-lg border border-slate-800/80">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs font-mono bg-slate-950/90 px-3 py-2 rounded-lg border border-slate-800/80 gap-1.5 sm:gap-0">
             <div className="flex items-center gap-1.5 text-slate-400">
               <DollarSign className="w-3.5 h-3.5 text-teal-400" />
               <span className="uppercase text-[10px] font-semibold">Commercial Value:</span>
@@ -164,7 +164,7 @@ export const EstimateConversationCard: React.FC<EstimateConversationCardProps> =
         )}
 
         {/* Approval and Action Footer */}
-        <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between flex-wrap gap-2">
+        <div className="pt-2 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
             {isApproved ? (
               <span className="text-emerald-400 font-medium flex items-center gap-1">
@@ -180,14 +180,14 @@ export const EstimateConversationCard: React.FC<EstimateConversationCardProps> =
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             {/* Direct Approve Action for Admin / Super Admin */}
             {canApprove && (
               <button
                 type="button"
                 onClick={handleApproveClick}
                 disabled={isApproving}
-                className="px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shadow-md shadow-emerald-950 active:scale-95"
+                className="w-full sm:w-auto justify-center px-4 py-2 sm:py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shadow-md shadow-emerald-950 active:scale-95"
                 title="Approve this estimate directly from conversation"
               >
                 <Check className="w-4 h-4 stroke-[3]" />
@@ -200,7 +200,7 @@ export const EstimateConversationCard: React.FC<EstimateConversationCardProps> =
               <button
                 type="button"
                 onClick={() => onGenerateWorkOrder(version.id)}
-                className="px-3 py-1.5 rounded-lg bg-teal-500/20 border border-teal-500/40 text-teal-300 hover:bg-teal-500/30 text-xs font-semibold flex items-center gap-1.5 transition"
+                className="w-full sm:w-auto justify-center px-3 py-2 sm:py-1.5 rounded-lg bg-teal-500/20 border border-teal-500/40 text-teal-300 hover:bg-teal-500/30 text-xs font-semibold flex items-center gap-1.5 transition"
               >
                 <FileCheck className="w-3.5 h-3.5" />
                 <span>Generate Work Order</span>

@@ -29,7 +29,8 @@ import {
   CheckCircle2, 
   Eye, 
   FileText,
-  Building2
+  Building2,
+  ChevronLeft
 } from 'lucide-react';
 
 interface MiddlePanelScopeProps {
@@ -45,6 +46,7 @@ interface MiddlePanelScopeProps {
   onGenerateWorkOrder: (versionId: string, kind: 'detailed' | 'summary') => void;
   onUpdateWorkOrderStatus: (woId: string, status: any) => void;
   onOpenClientReviewModal: (versionId: string) => void;
+  onBackToProjects?: () => void;
 }
 
 export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
@@ -60,6 +62,7 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
   onGenerateWorkOrder,
   onUpdateWorkOrderStatus,
   onOpenClientReviewModal,
+  onBackToProjects,
 }) => {
   const { canViewMoney, isSuperAdmin, isMember } = useAuth();
 
@@ -142,7 +145,7 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
 
   if (!project) {
     return (
-      <div className="w-[480px] h-full flex flex-col items-center justify-center bg-slate-900/60 border-r border-slate-800/80 p-8 text-center text-slate-500">
+      <div className="w-full lg:w-[350px] xl:w-[400px] 2xl:w-[460px] h-full flex flex-col items-center justify-center bg-slate-900/60 lg:border-r border-slate-800/80 p-8 text-center text-slate-500 shrink-0 min-w-0">
         <Layers className="w-12 h-12 text-slate-700 mb-3" />
         <h3 className="text-sm font-bold text-slate-300">No Project Selected</h3>
         <p className="text-xs text-slate-500 mt-1 max-w-xs">
@@ -153,15 +156,24 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
   }
 
   return (
-    <div className="w-[480px] h-full flex flex-col bg-slate-900/60 border-r border-slate-800/80">
+    <div className="w-full lg:w-[350px] xl:w-[400px] 2xl:w-[460px] h-full flex flex-col bg-slate-900/60 lg:border-r border-slate-800/80 shrink-0 min-w-0">
       {/* Project Overview Header */}
-      <div className="p-4 border-b border-slate-800/80 bg-slate-950/60">
+      <div className="p-3 sm:p-4 border-b border-slate-800/80 bg-slate-950/60">
+        {onBackToProjects && (
+          <button
+            onClick={onBackToProjects}
+            className="lg:hidden flex items-center gap-1 text-xs text-teal-400 hover:text-teal-300 mb-2 font-medium"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+            <span>Back to Projects</span>
+          </button>
+        )}
         <div className="flex items-start justify-between">
-          <div>
+          <div className="min-w-0 pr-2">
             <div className="text-[11px] font-semibold uppercase tracking-wider text-teal-400">
               Active Project Scope
             </div>
-            <h2 className="text-base font-bold text-slate-100 truncate max-w-[280px]">
+            <h2 className="text-base font-bold text-slate-100 truncate max-w-[200px] sm:max-w-[280px]">
               {project.name}
             </h2>
 
@@ -169,9 +181,9 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
             {client ? (
               <div className="flex items-center gap-1.5 text-xs text-slate-300 mt-1">
                 <Building2 className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-                <span className="font-semibold text-slate-100">{client.name}</span>
+                <span className="font-semibold text-slate-100 truncate">{client.name}</span>
                 {client.contacts && client.contacts.length > 0 && (
-                  <span className="text-[11px] text-slate-400 truncate max-w-[180px]">
+                  <span className="text-[11px] text-slate-400 truncate hidden sm:inline max-w-[150px]">
                     ({client.contacts[0].name})
                   </span>
                 )}
@@ -191,7 +203,7 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
           {canViewMoney && (
             <button
               onClick={() => setIsFinModalOpen(true)}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center gap-1 text-xs"
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center gap-1 text-xs shrink-0"
               title="Project Financial Rates & Budgets (Confidential)"
             >
               <Sliders className="w-3.5 h-3.5 text-teal-400" />
