@@ -62,7 +62,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     content: '',
     editorProps: {
       attributes: {
-        class: 'prose prose-invert max-w-none text-slate-100 px-3 py-2 text-sm focus:outline-none min-h-[90px]',
+        class: 'prose max-w-none text-slate-900 dark:text-slate-100 dark:prose-invert px-3 py-2 text-sm focus:outline-none min-h-[90px]',
       },
       handlePaste: (view, event) => {
         const clipboardData = event.clipboardData;
@@ -129,14 +129,14 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   };
 
   return (
-    <div className="border border-slate-800 bg-slate-900/90 rounded-xl overflow-hidden focus-within:border-teal-500/50 transition">
+    <div className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/90 rounded-xl overflow-hidden focus-within:border-emerald-500/50 dark:focus-within:border-teal-500/50 shadow-sm transition">
       {/* Formatting Toolbar */}
-      <div className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 border-b border-slate-800/80 bg-slate-950/40 text-slate-400 overflow-x-auto no-scrollbar">
+      <div className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/40 text-slate-600 dark:text-slate-400 overflow-x-auto no-scrollbar">
         <button
           type="button"
           onClick={() => editor?.chain().focus().toggleBold().run()}
-          className={`p-1.5 rounded hover:bg-slate-800 hover:text-slate-200 transition shrink-0 ${
-            editor?.isActive('bold') ? 'bg-slate-800 text-teal-400' : ''
+          className={`p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200 transition shrink-0 ${
+            editor?.isActive('bold') ? 'bg-emerald-100 text-emerald-800 dark:bg-slate-800 dark:text-teal-400' : ''
           }`}
           title="Bold (Ctrl+B)"
         >
@@ -145,8 +145,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         <button
           type="button"
           onClick={() => editor?.chain().focus().toggleItalic().run()}
-          className={`p-1.5 rounded hover:bg-slate-800 hover:text-slate-200 transition shrink-0 ${
-            editor?.isActive('italic') ? 'bg-slate-800 text-teal-400' : ''
+          className={`p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200 transition shrink-0 ${
+            editor?.isActive('italic') ? 'bg-emerald-100 text-emerald-800 dark:bg-slate-800 dark:text-teal-400' : ''
           }`}
           title="Italic (Ctrl+I)"
         >
@@ -155,21 +155,21 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         <button
           type="button"
           onClick={() => editor?.chain().focus().toggleUnderline().run()}
-          className={`p-1.5 rounded hover:bg-slate-800 hover:text-slate-200 transition shrink-0 ${
-            editor?.isActive('underline') ? 'bg-slate-800 text-teal-400' : ''
+          className={`p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200 transition shrink-0 ${
+            editor?.isActive('underline') ? 'bg-emerald-100 text-emerald-800 dark:bg-slate-800 dark:text-teal-400' : ''
           }`}
           title="Underline (Ctrl+U)"
         >
           <UnderlineIcon className="w-4 h-4" />
         </button>
 
-        <span className="w-px h-4 bg-slate-800 mx-1 shrink-0" />
+        <span className="w-px h-4 bg-slate-200 dark:bg-slate-800 mx-1 shrink-0" />
 
         <button
           type="button"
           onClick={() => editor?.chain().focus().toggleBulletList().run()}
-          className={`p-1.5 rounded hover:bg-slate-800 hover:text-slate-200 transition shrink-0 ${
-            editor?.isActive('bulletList') ? 'bg-slate-800 text-teal-400' : ''
+          className={`p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200 transition shrink-0 ${
+            editor?.isActive('bulletList') ? 'bg-emerald-100 text-emerald-800 dark:bg-slate-800 dark:text-teal-400' : ''
           }`}
           title="Bullet List"
         >
@@ -178,8 +178,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         <button
           type="button"
           onClick={() => editor?.chain().focus().toggleOrderedList().run()}
-          className={`p-1.5 rounded hover:bg-slate-800 hover:text-slate-200 transition shrink-0 ${
-            editor?.isActive('orderedList') ? 'bg-slate-800 text-teal-400' : ''
+          className={`p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200 transition shrink-0 ${
+            editor?.isActive('orderedList') ? 'bg-emerald-100 text-emerald-800 dark:bg-slate-800 dark:text-teal-400' : ''
           }`}
           title="Numbered List"
         >
@@ -188,13 +188,13 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         <button
           type="button"
           onClick={insertTable}
-          className="p-1.5 rounded hover:bg-slate-800 hover:text-slate-200 transition shrink-0"
+          className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200 transition shrink-0"
           title="Insert Table"
         >
           <TableIcon className="w-4 h-4" />
         </button>
 
-        <span className="w-px h-4 bg-slate-800 mx-1 shrink-0" />
+        <span className="w-px h-4 bg-slate-200 dark:bg-slate-800 mx-1 shrink-0" />
 
         {/* Attachment button */}
         <input
@@ -208,10 +208,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="p-1.5 rounded hover:bg-slate-800 hover:text-slate-200 transition flex items-center gap-1 text-xs shrink-0"
+          className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition flex items-center gap-1 text-xs shrink-0"
           title="Attach Image (max 10MB) or Video (max 50MB)"
         >
-          <Paperclip className="w-4 h-4" />
+          <Paperclip className="w-4 h-4 text-emerald-600 dark:text-teal-400" />
           <span>Attach</span>
         </button>
 
@@ -221,18 +221,18 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       </div>
 
       {/* Editor Content Area */}
-      <div className="bg-slate-900/60 min-h-[90px]">
+      <div className="bg-white dark:bg-slate-900/60 min-h-[90px]">
         <EditorContent editor={editor} />
       </div>
 
       {/* Validation Error Alert */}
       {uploadError && (
-        <div className="mx-3 my-2 p-2.5 rounded-lg bg-rose-950/60 border border-rose-800 text-rose-200 text-xs flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+        <div className="mx-3 my-2 p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
           <div>
             <div className="font-semibold">{uploadError.error}</div>
             {uploadError.recommendation && (
-              <div className="text-rose-300 mt-0.5">{uploadError.recommendation}</div>
+              <div className="text-rose-700 dark:text-rose-300 mt-0.5">{uploadError.recommendation}</div>
             )}
           </div>
         </div>
@@ -240,19 +240,19 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
       {/* Pending Attachments List */}
       {attachments.length > 0 && (
-        <div className="px-3 py-2 border-t border-slate-800 bg-slate-950/40 flex flex-wrap gap-2">
+        <div className="px-3 py-2 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 flex flex-wrap gap-2">
           {attachments.map((file, i) => (
             <div
               key={i}
-              className="flex items-center gap-1.5 text-xs bg-slate-800 text-slate-200 px-2.5 py-1 rounded-md border border-slate-700"
+              className="flex items-center gap-1.5 text-xs bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700"
             >
-              <Paperclip className="w-3.5 h-3.5 text-teal-400" />
-              <span className="truncate max-w-[150px]">{file.name}</span>
-              <span className="text-slate-400">({(file.size / 1024 / 1024).toFixed(1)}MB)</span>
+              <Paperclip className="w-3.5 h-3.5 text-emerald-600 dark:text-teal-400" />
+              <span className="truncate max-w-[150px] font-medium">{file.name}</span>
+              <span className="text-slate-500 dark:text-slate-400">({(file.size / 1024 / 1024).toFixed(1)}MB)</span>
               <button
                 type="button"
                 onClick={() => setAttachments((prev) => prev.filter((_, idx) => idx !== i))}
-                className="text-slate-400 hover:text-rose-400 ml-1"
+                className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 ml-1"
               >
                 ×
               </button>
@@ -262,15 +262,15 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       )}
 
       {/* Action Footer */}
-      <div className="px-3 py-2 border-t border-slate-800/80 bg-slate-950/60 flex items-center justify-between gap-2">
+      <div className="px-3 py-2 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-950/60 flex items-center justify-between gap-2">
         <div className="hidden sm:block text-[11px] text-slate-500 truncate">
-          Paste tables, bold, and links cleanly • Source theme backgrounds are automatically removed
+          Paste tables, bold, and links cleanly • Theme styles automatically preserved
         </div>
         <button
           type="button"
           onClick={handleSend}
           disabled={disabled}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 bg-teal-500 hover:bg-teal-400 text-slate-950 font-semibold px-4 py-2 sm:py-1.5 rounded-lg text-xs transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-teal-950 active:scale-95 shrink-0"
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 dark:bg-teal-500 dark:hover:bg-teal-400 text-white dark:text-slate-950 font-semibold px-4 py-2 sm:py-1.5 rounded-lg text-xs transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-emerald-600/20 dark:shadow-teal-950 active:scale-95 shrink-0"
         >
           <Send className="w-3.5 h-3.5" />
           <span>Send Message</span>

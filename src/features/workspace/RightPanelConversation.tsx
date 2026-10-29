@@ -97,42 +97,42 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
   }
 
   return (
-    <div className="w-full lg:flex-1 h-full flex flex-col bg-slate-950 overflow-hidden min-w-0">
+    <div className="w-full lg:flex-1 h-full flex flex-col bg-slate-100/60 dark:bg-slate-950 overflow-hidden min-w-0 text-slate-900 dark:text-slate-100">
       {/* Conversation Top Header */}
-      <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-slate-800/80 bg-slate-950/80 flex items-center justify-between gap-2">
+      <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-950/80 flex items-center justify-between gap-2 shadow-xs">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           {onBackToProjects && (
             <button
               onClick={onBackToProjects}
-              className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-900 transition shrink-0"
+              className="lg:hidden p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-900 transition shrink-0"
               title="Back to projects"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
           )}
-          <div className="p-1.5 sm:p-2 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 shrink-0">
+          <div className="p-1.5 sm:p-2 rounded-xl bg-emerald-50 dark:bg-teal-500/10 border border-emerald-200 dark:border-teal-500/20 text-emerald-600 dark:text-teal-400 shrink-0">
             <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="text-xs sm:text-sm font-bold text-slate-100 truncate">Project Conversation</h2>
-              <span className="hidden sm:inline-block text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-teal-950/80 text-teal-300 border border-teal-800/60 shrink-0">
+              <h2 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 truncate">Project Conversation</h2>
+              <span className="hidden sm:inline-block text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-teal-950/80 dark:text-teal-300 dark:border-teal-800/60 shrink-0">
                 Primary Thread
               </span>
             </div>
-            <div className="text-[11px] sm:text-xs text-slate-400 flex items-center gap-1.5 sm:gap-2 mt-0.5 truncate">
+            <div className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5 sm:gap-2 mt-0.5 truncate">
               {client && (
                 <>
-                  <span className="flex items-center gap-1 text-slate-200 font-semibold truncate">
-                    <Building2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-teal-400 shrink-0" />
+                  <span className="flex items-center gap-1 text-slate-800 dark:text-slate-200 font-semibold truncate">
+                    <Building2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-600 dark:text-teal-400 shrink-0" />
                     <span className="truncate">{client.name}</span>
                   </span>
-                  <span className="text-slate-600">•</span>
+                  <span className="text-slate-400 dark:text-slate-600">•</span>
                 </>
               )}
-              <span className="truncate">{project.name}</span>
-              <span className="text-slate-600 hidden md:inline">•</span>
-              <span className="font-mono text-cyan-300 hidden md:inline truncate">{project.timezone}</span>
+              <span className="truncate font-medium">{project.name}</span>
+              <span className="text-slate-400 dark:text-slate-600 hidden md:inline">•</span>
+              <span className="font-mono text-cyan-700 dark:text-cyan-300 hidden md:inline truncate">{project.timezone}</span>
             </div>
           </div>
         </div>
@@ -142,7 +142,7 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
           {canViewMoney && (
             <button
               onClick={onOpenEstimateDraftModal}
-              className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 text-xs font-semibold flex items-center gap-1 sm:gap-1.5 transition"
+              className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-teal-500/10 dark:hover:bg-teal-500/20 dark:text-teal-300 dark:border-teal-500/30 text-xs font-semibold flex items-center gap-1 sm:gap-1.5 transition"
               title="Create new scope estimate"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -154,10 +154,10 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
           {isSuperAdmin && (
             <button
               onClick={onOpenAuditConsole}
-              className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-semibold flex items-center gap-1 sm:gap-1.5 transition"
+              className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:hover:bg-indigo-500/20 dark:text-indigo-300 dark:border-indigo-500/30 text-xs font-semibold flex items-center gap-1 sm:gap-1.5 transition"
               title="Super Admin Private Audit Console"
             >
-              <ShieldAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400" />
+              <ShieldAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600 dark:text-indigo-400" />
               <span className="hidden sm:inline">Audit Console</span>
               <span className="sm:hidden text-[11px]">Audit</span>
             </button>
@@ -203,20 +203,20 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
                 </div>
 
                 {/* Message Body */}
-                <div className="flex-1 bg-slate-900/50 border border-slate-800/80 rounded-xl p-3.5 space-y-2 hover:border-slate-700/80 transition">
+                <div className="flex-1 bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800/80 rounded-xl p-3.5 space-y-2 hover:border-slate-300 dark:hover:border-slate-700/80 transition shadow-xs">
                   {/* Message Meta Header */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span
                         className={`font-semibold ${
-                          isAuthorSuperAdmin ? 'text-amber-300 font-bold' : 'text-slate-200'
+                          isAuthorSuperAdmin ? 'text-amber-700 dark:text-amber-300 font-bold' : 'text-slate-800 dark:text-slate-200'
                         }`}
                       >
                         {displayedAuthor}
                       </span>
 
                       {isAuthorSuperAdmin && (
-                        <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded bg-amber-950/80 border border-amber-800 text-amber-400">
+                        <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded bg-amber-100 border border-amber-300 text-amber-800 dark:bg-amber-950/80 dark:border-amber-800 dark:text-amber-400">
                           Management
                         </span>
                       )}
@@ -323,7 +323,7 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
       </div>
 
       {/* Message Input Composer */}
-      <div className="p-2.5 sm:p-4 border-t border-slate-800/80 bg-slate-950/80">
+      <div className="p-2.5 sm:p-4 border-t border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/80">
         <RichTextEditor onSendMessage={onSendMessage} />
       </div>
 

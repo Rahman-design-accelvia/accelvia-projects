@@ -1,6 +1,7 @@
 // src/index.tsx
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+import { ThemeProvider } from './features/theme/ThemeContext';
 import { AuthProvider } from './features/auth/AuthContext';
 import { WorkspaceLayout } from './features/workspace/WorkspaceLayout';
 
@@ -12,8 +13,10 @@ if (!container) {
 const root = createRoot(container);
 root.render(
   <React.StrictMode>
-    <AuthProvider>
-      <WorkspaceLayout />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <WorkspaceLayout />
+      </AuthProvider>
+    </ThemeProvider>
   </React.StrictMode>
 );

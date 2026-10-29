@@ -146,11 +146,11 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
   };
 
   return (
-    <div className="w-full lg:w-60 xl:w-64 2xl:w-80 h-full flex flex-col bg-slate-950 lg:border-r border-slate-800/80 select-none shrink-0 min-w-0">
+    <div className="w-full lg:w-60 xl:w-64 2xl:w-80 h-full flex flex-col bg-white dark:bg-slate-950 lg:border-r border-slate-200 dark:border-slate-800/80 select-none shrink-0 min-w-0 text-slate-900 dark:text-slate-100">
       {/* Top Header */}
-      <div className="p-3 sm:p-4 border-b border-slate-800/80 flex items-center justify-between bg-slate-950/80">
+      <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-slate-800/80 flex items-center justify-between bg-slate-50/80 dark:bg-slate-950/80">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
             Clients & Projects
           </div>
           <div className="text-[11px] text-slate-500">
@@ -163,14 +163,14 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
             <>
               <button
                 onClick={() => setIsClientModalOpen(true)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-teal-300 hover:bg-slate-900 transition"
+                className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-emerald-700 dark:hover:text-teal-300 hover:bg-slate-200 dark:hover:bg-slate-900 transition"
                 title="Add Client Company"
               >
                 <Building2 className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setIsProjectModalOpen(true)}
-                className="p-1.5 rounded-lg bg-teal-500/10 text-teal-400 hover:bg-teal-500/20 transition flex items-center gap-1 text-xs px-2"
+                className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 dark:border-transparent dark:bg-teal-500/10 dark:text-teal-400 dark:hover:bg-teal-500/20 transition flex items-center gap-1 text-xs px-2 font-medium"
                 title="Create New Project"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -181,7 +181,7 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
           {onCloseMobileDrawer && (
             <button
               onClick={onCloseMobileDrawer}
-              className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-900 transition ml-1"
+              className="lg:hidden p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-900 transition ml-1"
               title="Close drawer"
             >
               <X className="w-4 h-4" />
@@ -191,15 +191,15 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
       </div>
 
       {/* Search Bar */}
-      <div className="p-3 border-b border-slate-800/50">
+      <div className="p-3 border-b border-slate-200 dark:border-slate-800/50">
         <div className="relative">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
           <input
             type="text"
             placeholder="Search projects or clients..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800/80 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500/50"
+            className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500/50"
           />
         </div>
       </div>
@@ -208,8 +208,8 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
       <div className="flex-1 overflow-y-auto p-2 space-y-2">
         {clients.length === 0 && (
           <div className="text-center py-16 px-4 text-slate-500 space-y-2.5">
-            <Building2 className="w-8 h-8 mx-auto text-slate-700" />
-            <div className="text-xs font-semibold text-slate-300">Clean Slate Ready</div>
+            <Building2 className="w-8 h-8 mx-auto text-slate-400 dark:text-slate-700" />
+            <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">Clean Slate Ready</div>
             <p className="text-[11px] text-slate-500 leading-relaxed">
               No clients or projects found. Use the buttons above to create your first client company and project.
             </p>
@@ -222,11 +222,11 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
           const isExpanded = expandedClients[client.id] ?? true;
 
           return (
-            <div key={client.id} className="rounded-xl border border-slate-800/40 bg-slate-900/30 overflow-hidden">
+            <div key={client.id} className="rounded-xl border border-slate-200 dark:border-slate-800/40 bg-slate-50/60 dark:bg-slate-900/30 overflow-hidden shadow-xs">
               {/* Client Accordion Header */}
               <div
                 onClick={() => toggleClient(client.id)}
-                className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-slate-900/70 transition group"
+                className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-slate-100/80 dark:hover:bg-slate-900/70 transition group"
               >
                 <div className="flex items-center gap-2 min-w-0">
                   {isExpanded ? (
@@ -234,9 +234,9 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
                   ) : (
                     <ChevronRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-300 transition" />
                   )}
-                  <Building2 className="w-4 h-4 text-teal-400 shrink-0" />
+                  <Building2 className="w-4 h-4 text-emerald-600 dark:text-teal-400 shrink-0" />
                   <div className="min-w-0">
-                    <div className="text-xs font-semibold text-slate-200 truncate">{client.name}</div>
+                    <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">{client.name}</div>
                     {client.contacts && client.contacts.length > 0 && (
                       <div className="text-[10px] text-slate-500 truncate">
                         {client.contacts[0].name} {client.contacts[0].email ? `• ${client.contacts[0].email}` : ''}
@@ -254,7 +254,7 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
                         e.stopPropagation();
                         handleOpenProjectModalForClient(client.id);
                       }}
-                      className="p-1 rounded bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-teal-300 ml-1 transition"
+                      className="p-1 rounded bg-slate-200 dark:bg-slate-800/80 hover:bg-slate-300 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-emerald-700 dark:hover:text-teal-300 ml-1 transition"
                       title={`Assign new project to ${client.name}`}
                     >
                       <Plus className="w-3 h-3" />
@@ -265,7 +265,7 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
 
               {/* Projects List under Client */}
               {isExpanded && (
-                <div className="pl-6 pr-2 py-1 space-y-1 border-t border-slate-800/40 bg-slate-950/40">
+                <div className="pl-6 pr-2 py-1 space-y-1 border-t border-slate-200 dark:border-slate-800/40 bg-white dark:bg-slate-950/40">
                   {clientProjects.length === 0 ? (
                     <div className="text-[11px] text-slate-600 py-1.5 pl-2 italic">
                       No active projects
@@ -282,14 +282,14 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
                           }}
                           className={`flex items-center justify-between px-2.5 py-2 rounded-lg cursor-pointer text-xs transition ${
                             isSelected
-                              ? 'bg-teal-500/15 border border-teal-500/30 text-teal-200 font-medium'
-                              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                              ? 'bg-emerald-50 dark:bg-teal-500/15 border border-emerald-300 dark:border-teal-500/30 text-emerald-900 dark:text-teal-200 font-semibold shadow-xs'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900/60'
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate">
                             <FolderKanban
                               className={`w-3.5 h-3.5 shrink-0 ${
-                                isSelected ? 'text-teal-400' : 'text-slate-500'
+                                isSelected ? 'text-emerald-600 dark:text-teal-400' : 'text-slate-400 dark:text-slate-500'
                               }`}
                             />
                             <span className="truncate">{proj.name}</span>
@@ -322,7 +322,7 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
               value={newClientName}
               onChange={(e) => setNewClientName(e.target.value)}
               placeholder="e.g. Acme Global Logistics"
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
+              className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500"
             />
           </div>
 
@@ -331,7 +331,7 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
             <select
               value={newClientTz}
               onChange={(e) => setNewClientTz(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
+              className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500"
             >
               <option value="America/New_York">America/New_York (US Eastern)</option>
               <option value="America/Chicago">America/Chicago (US Central)</option>
@@ -358,7 +358,7 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
                   value={newContactName}
                   onChange={(e) => setNewContactName(e.target.value)}
                   placeholder="e.g. Robert Vance"
-                  className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500"
                 />
               </div>
               <div>
@@ -368,7 +368,7 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
                   value={newContactEmail}
                   onChange={(e) => setNewContactEmail(e.target.value)}
                   placeholder="e.g. robert@client.com"
-                  className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500"
                 />
               </div>
             </div>
@@ -380,7 +380,7 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
                   value={newContactTitle}
                   onChange={(e) => setNewContactTitle(e.target.value)}
                   placeholder="e.g. VP Engineering"
-                  className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500"
                 />
               </div>
               <div>
@@ -390,7 +390,7 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
                   value={newContactPhone}
                   onChange={(e) => setNewContactPhone(e.target.value)}
                   placeholder="+1 (555) 234-5678"
-                  className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500"
                 />
               </div>
             </div>
@@ -403,7 +403,7 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
               value={newClientNotes}
               onChange={(e) => setNewClientNotes(e.target.value)}
               placeholder="Commercial terms, billing preferences, or background..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
+              className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500"
             />
           </div>
 
@@ -411,13 +411,13 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
             <button
               type="button"
               onClick={() => setIsClientModalOpen(false)}
-              className="px-3 py-1.5 rounded-lg border border-slate-800 text-xs text-slate-400 hover:bg-slate-800"
+              className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-1.5 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-950 font-semibold text-xs transition"
+              className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 dark:bg-teal-500 dark:hover:bg-teal-400 text-white dark:text-slate-950 font-semibold text-xs transition shadow-md shadow-emerald-600/20 dark:shadow-teal-950"
             >
               Save Client
             </button>
@@ -441,7 +441,7 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
               value={newProjectName}
               onChange={(e) => setNewProjectName(e.target.value)}
               placeholder="e.g. Infrastructure Modernization"
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
+              className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500"
             />
           </div>
 
@@ -486,7 +486,7 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
                 required
                 value={newProjectClientId}
                 onChange={(e) => handleClientSelectionChange(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
+                className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500"
               >
                 <option value="" disabled>-- Select Client Company --</option>
                 {clients.map((c) => (
@@ -519,7 +519,7 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
             <select
               value={newProjectTz}
               onChange={(e) => setNewProjectTz(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
+              className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500"
             >
               <option value="America/New_York">America/New_York (US Eastern)</option>
               <option value="America/Chicago">America/Chicago (US Central)</option>
@@ -539,7 +539,7 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
               value={newProjectDesc}
               onChange={(e) => setNewProjectDesc(e.target.value)}
               placeholder="High-level project objectives and technical scope..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
+              className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500"
             />
           </div>
 
@@ -547,13 +547,13 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
             <button
               type="button"
               onClick={() => setIsProjectModalOpen(false)}
-              className="px-3 py-1.5 rounded-lg border border-slate-800 text-xs text-slate-400 hover:bg-slate-800"
+              className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-1.5 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-950 font-semibold text-xs transition"
+              className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 dark:bg-teal-500 dark:hover:bg-teal-400 text-white dark:text-slate-950 font-semibold text-xs transition shadow-md shadow-emerald-600/20 dark:shadow-teal-950"
             >
               Initialize Project
             </button>

@@ -156,13 +156,13 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
   }
 
   return (
-    <div className="w-full lg:w-[350px] xl:w-[400px] 2xl:w-[460px] h-full flex flex-col bg-slate-900/60 lg:border-r border-slate-800/80 shrink-0 min-w-0">
+    <div className="w-full lg:w-[350px] xl:w-[400px] 2xl:w-[460px] h-full flex flex-col bg-slate-50/70 dark:bg-slate-900/60 lg:border-r border-slate-200 dark:border-slate-800/80 shrink-0 min-w-0 text-slate-900 dark:text-slate-100">
       {/* Project Overview Header */}
-      <div className="p-3 sm:p-4 border-b border-slate-800/80 bg-slate-950/60">
+      <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-950/60">
         {onBackToProjects && (
           <button
             onClick={onBackToProjects}
-            className="lg:hidden flex items-center gap-1 text-xs text-teal-400 hover:text-teal-300 mb-2 font-medium"
+            className="lg:hidden flex items-center gap-1 text-xs text-emerald-600 dark:text-teal-400 hover:text-emerald-500 dark:hover:text-teal-300 mb-2 font-medium"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
             <span>Back to Projects</span>
@@ -170,20 +170,20 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
         )}
         <div className="flex items-start justify-between">
           <div className="min-w-0 pr-2">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-teal-400">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-teal-400">
               Active Project Scope
             </div>
-            <h2 className="text-base font-bold text-slate-100 truncate max-w-[200px] sm:max-w-[280px]">
+            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 truncate max-w-[200px] sm:max-w-[280px]">
               {project.name}
             </h2>
 
             {/* Assigned Client Company Profile Badge */}
             {client ? (
-              <div className="flex items-center gap-1.5 text-xs text-slate-300 mt-1">
-                <Building2 className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-                <span className="font-semibold text-slate-100 truncate">{client.name}</span>
+              <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 mt-1">
+                <Building2 className="w-3.5 h-3.5 text-emerald-600 dark:text-teal-400 shrink-0" />
+                <span className="font-semibold text-slate-900 dark:text-slate-100 truncate">{client.name}</span>
                 {client.contacts && client.contacts.length > 0 && (
-                  <span className="text-[11px] text-slate-400 truncate hidden sm:inline max-w-[150px]">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate hidden sm:inline max-w-[150px]">
                     ({client.contacts[0].name})
                   </span>
                 )}
@@ -194,19 +194,19 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
               </div>
             )}
 
-            <div className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
+            <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mt-0.5">
               <span>Timezone:</span>
-              <span className="font-mono text-cyan-300">{project.timezone}</span>
+              <span className="font-mono text-cyan-700 dark:text-cyan-300">{project.timezone}</span>
             </div>
           </div>
 
           {canViewMoney && (
             <button
               onClick={() => setIsFinModalOpen(true)}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center gap-1 text-xs shrink-0"
+              className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 dark:border-transparent dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 transition flex items-center gap-1 text-xs shrink-0"
               title="Project Financial Rates & Budgets (Confidential)"
             >
-              <Sliders className="w-3.5 h-3.5 text-teal-400" />
+              <Sliders className="w-3.5 h-3.5 text-emerald-600 dark:text-teal-400" />
               <span>Rates</span>
             </button>
           )}
@@ -215,12 +215,12 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
         {/* Aggregated Hours & Monetary KPI Cards */}
         <div className="grid grid-cols-2 gap-2 mt-3">
           {/* Approved Hours Card (Always visible to all roles) */}
-          <div className="bg-slate-900 border border-emerald-900/40 rounded-lg p-2.5">
-            <div className="text-[10px] uppercase font-semibold text-emerald-400 flex items-center gap-1">
+          <div className="bg-emerald-50 border border-emerald-200 dark:bg-slate-900 dark:border-emerald-900/40 rounded-lg p-2.5 shadow-xs">
+            <div className="text-[10px] uppercase font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" />
               <span>Approved Scope</span>
             </div>
-            <div className="text-xl font-bold font-mono text-emerald-300 mt-0.5">
+            <div className="text-xl font-bold font-mono text-emerald-800 dark:text-emerald-300 mt-0.5">
               {formatHours(totalApprovedHours)}
             </div>
             <div className="text-[10px] text-slate-500 mt-0.5">
@@ -230,25 +230,25 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
 
           {/* Internal Budget Card (Role restricted) */}
           {canViewMoney ? (
-            <div className="bg-slate-900 border border-slate-800 rounded-lg p-2.5">
-              <div className="text-[10px] uppercase font-semibold text-slate-400 flex items-center gap-1">
-                <DollarSign className="w-3 h-3 text-cyan-400" />
+            <div className="bg-white border border-slate-200 dark:bg-slate-900 dark:border-slate-800 rounded-lg p-2.5 shadow-xs">
+              <div className="text-[10px] uppercase font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <DollarSign className="w-3 h-3 text-cyan-600 dark:text-cyan-400" />
                 <span>Commercial Value</span>
               </div>
-              <div className="text-sm font-bold font-mono text-slate-200 mt-1">
+              <div className="text-sm font-bold font-mono text-slate-900 dark:text-slate-200 mt-1">
                 {formatUSD(totalApprovedHours * (financialSettings?.client_rate_usd_per_hour || 50))}
               </div>
-              <div className="text-[10px] font-mono text-slate-400">
+              <div className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
                 {formatBDT(totalApprovedHours * (financialSettings?.client_rate_bdt_per_hour || 6000))}
               </div>
             </div>
           ) : (
-            <div className="bg-slate-900 border border-slate-800 rounded-lg p-2.5">
-              <div className="text-[10px] uppercase font-semibold text-slate-400 flex items-center gap-1">
+            <div className="bg-white border border-slate-200 dark:bg-slate-900 dark:border-slate-800 rounded-lg p-2.5 shadow-xs">
+              <div className="text-[10px] uppercase font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1">
                 <Clock className="w-3 h-3 text-slate-400" />
                 <span>Budget Allocation</span>
               </div>
-              <div className="text-xl font-bold font-mono text-slate-300 mt-0.5">
+              <div className="text-xl font-bold font-mono text-slate-800 dark:text-slate-300 mt-0.5">
                 {formatHours(financialSettings?.internal_budget_hours || 120)}
               </div>
               <div className="text-[10px] text-slate-500 mt-0.5">
@@ -259,13 +259,13 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex gap-2 mt-3 border-b border-slate-800">
+        <div className="flex gap-2 mt-3 border-b border-slate-200 dark:border-slate-800">
           <button
             onClick={() => setActiveTab('scope')}
             className={`pb-2 px-1 text-xs font-semibold flex items-center gap-1.5 transition ${
               activeTab === 'scope'
-                ? 'border-b-2 border-teal-400 text-teal-300'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'border-b-2 border-emerald-600 text-emerald-800 dark:border-teal-400 dark:text-teal-300 font-bold'
+                : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
@@ -275,8 +275,8 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
             onClick={() => setActiveTab('work-orders')}
             className={`pb-2 px-1 text-xs font-semibold flex items-center gap-1.5 transition ${
               activeTab === 'work-orders'
-                ? 'border-b-2 border-teal-400 text-teal-300'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'border-b-2 border-emerald-600 text-emerald-800 dark:border-teal-400 dark:text-teal-300 font-bold'
+                : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
           >
             <FileCheck className="w-3.5 h-3.5" />
@@ -314,13 +314,13 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
               return (
                 <div
                   key={pkg.id}
-                  className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 space-y-3"
+                  className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl p-3 space-y-3 shadow-xs"
                 >
-                  <div className="flex items-center justify-between border-b border-slate-800/60 pb-2">
+                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/60 pb-2">
                     <div className="flex items-center gap-2">
-                      <FileSpreadsheet className="w-4 h-4 text-teal-400" />
-                      <span className="text-xs font-bold text-slate-200">{pkg.title}</span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">
+                      <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-teal-400" />
+                      <span className="text-xs font-bold text-slate-900 dark:text-slate-200">{pkg.title}</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
                         {pkg.package_kind}
                       </span>
                     </div>
@@ -331,26 +331,26 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                     {pkgVersions.map((ver) => (
                       <div
                         key={ver.id}
-                        className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-3 space-y-2"
+                        className="bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 rounded-lg p-3 space-y-2"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold font-mono text-slate-200">
+                            <span className="text-xs font-bold font-mono text-slate-900 dark:text-slate-200">
                               v{ver.version_number}.0
                             </span>
                             <StatusBadge status={ver.status} size="sm" />
                           </div>
-                          <div className="text-xs font-mono font-semibold text-slate-300">
+                          <div className="text-xs font-mono font-semibold text-slate-700 dark:text-slate-300">
                             {formatHours(ver.total_hours_snapshot)}
                           </div>
                         </div>
 
                         {/* Financial Snapshot (Only for Admins / Super Admin) */}
                         {canViewMoney && ver.total_usd_snapshot != null && (
-                          <div className="flex items-center justify-between text-xs font-mono text-slate-400 bg-slate-900/60 px-2 py-1 rounded border border-slate-800/50">
+                          <div className="flex items-center justify-between text-xs font-mono text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900/60 px-2 py-1 rounded border border-slate-200 dark:border-slate-800/50">
                             <span>Client Total:</span>
                             <div className="space-x-2">
-                              <span className="text-slate-200 font-semibold">
+                              <span className="text-slate-900 dark:text-slate-200 font-semibold">
                                 {formatUSD(ver.total_usd_snapshot)}
                               </span>
                               <span className="text-slate-400">
@@ -390,7 +390,7 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                                   setSelectedVersionForSend(ver);
                                   setIsSendModalOpen(true);
                                 }}
-                                className="px-2 py-1 rounded bg-teal-500 hover:bg-teal-400 text-slate-950 font-semibold text-[11px] flex items-center gap-1 transition"
+                                className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 dark:bg-teal-500 dark:hover:bg-teal-400 text-white dark:text-slate-950 font-semibold text-[11px] flex items-center gap-1 transition shadow-xs"
                               >
                                 <Send className="w-3 h-3" />
                                 <span>Send</span>
@@ -526,7 +526,7 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
               step="0.01"
               value={formBudgetHours}
               onChange={(e) => setFormBudgetHours(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono focus:outline-none focus:border-teal-500"
+              className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500"
             />
           </div>
 
@@ -540,7 +540,7 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                 step="0.01"
                 value={formRateUsd}
                 onChange={(e) => setFormRateUsd(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono focus:outline-none focus:border-teal-500"
+                className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500"
               />
             </div>
             <div>
@@ -552,7 +552,7 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                 step="0.01"
                 value={formRateBdt}
                 onChange={(e) => setFormRateBdt(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 font-mono focus:outline-none focus:border-teal-500"
+                className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500"
               />
             </div>
           </div>

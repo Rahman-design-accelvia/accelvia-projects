@@ -64,44 +64,44 @@ export const ClientReviewModal: React.FC<ClientReviewModalProps> = ({
     >
       <div className="space-y-4 text-xs">
         {/* Security Isolation Notice */}
-        <div className="flex items-center gap-2 bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-teal-300">
-          <ShieldCheck className="w-4 h-4 text-teal-400 shrink-0" />
+        <div className="flex items-center gap-2 bg-emerald-50 dark:bg-slate-950 p-2.5 rounded-lg border border-emerald-200 dark:border-slate-800 text-emerald-800 dark:text-teal-300">
+          <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-teal-400 shrink-0" />
           <span>
             <strong>Isolated Client View:</strong> Internal conversations, internal costs, and employee rosters are withheld by database security policies.
           </span>
         </div>
 
         {/* Commercial Scope Card */}
-        <div className="bg-slate-950 rounded-xl border border-slate-800 p-4 space-y-3">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+        <div className="bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
             <div>
-              <div className="text-sm font-bold text-slate-100">
+              <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
                 Scope Estimate — v{version.version_number}.0
               </div>
-              <div className="text-slate-400 text-[11px] mt-0.5">Project: {project.name}</div>
+              <div className="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">Project: {project.name}</div>
             </div>
             <StatusBadge status={version.status} size="sm" />
           </div>
 
           {/* Scope Line Items Table */}
-          <div className="border border-slate-800/80 rounded-lg overflow-hidden">
+          <div className="border border-slate-200 dark:border-slate-800/80 rounded-lg overflow-hidden">
             <table className="w-full text-left">
-              <thead className="bg-slate-900 text-slate-400 font-semibold text-[11px]">
+              <thead className="bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-semibold text-[11px]">
                 <tr>
                   <th className="py-2 px-3">Item / Deliverable</th>
                   <th className="py-2 px-3 text-right">Hours</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800 text-slate-200">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-slate-700 dark:text-slate-200">
                 {version.items?.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-900/40">
+                  <tr key={item.id} className="hover:bg-slate-100/60 dark:hover:bg-slate-900/40">
                     <td className="py-2 px-3">
-                      <div className="font-medium text-slate-100">{item.title}</div>
+                      <div className="font-medium text-slate-900 dark:text-slate-100">{item.title}</div>
                       {item.description && (
-                        <div className="text-[11px] text-slate-400">{item.description}</div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400">{item.description}</div>
                       )}
                     </td>
-                    <td className="py-2 px-3 text-right font-mono text-teal-300">
+                    <td className="py-2 px-3 text-right font-mono text-emerald-700 dark:text-teal-300">
                       {formatHours(item.hours)}
                     </td>
                   </tr>
@@ -111,16 +111,16 @@ export const ClientReviewModal: React.FC<ClientReviewModalProps> = ({
           </div>
 
           {/* Commercial Totals */}
-          <div className="flex justify-between items-center bg-slate-900/60 p-3 rounded-lg border border-slate-800 font-mono">
-            <span className="text-slate-400 uppercase text-[10px] font-semibold">
+          <div className="flex justify-between items-center bg-slate-100/80 dark:bg-slate-900/60 p-3 rounded-lg border border-slate-200 dark:border-slate-800 font-mono">
+            <span className="text-slate-500 dark:text-slate-400 uppercase text-[10px] font-semibold">
               Authorized Total:
             </span>
             <div className="text-right">
-              <div className="text-sm font-bold text-slate-100">
+              <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
                 {formatHours(version.total_hours_snapshot)}
               </div>
               {version.total_usd_snapshot != null && (
-                <div className="text-teal-400 font-bold text-xs">
+                <div className="text-emerald-700 dark:text-teal-400 font-bold text-xs">
                   {formatUSD(version.total_usd_snapshot)} USD
                 </div>
               )}
@@ -130,40 +130,40 @@ export const ClientReviewModal: React.FC<ClientReviewModalProps> = ({
 
         {/* Client Decision Section */}
         {decisionRecorded ? (
-          <div className="bg-emerald-950/60 border border-emerald-800 p-4 rounded-xl text-center space-y-1">
-            <CheckCircle2 className="w-6 h-6 text-emerald-400 mx-auto" />
-            <div className="font-bold text-emerald-300">Decision Recorded Successfully</div>
-            <p className="text-slate-300 text-[11px]">
+          <div className="bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 p-4 rounded-xl text-center space-y-1">
+            <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400 mx-auto" />
+            <div className="font-bold text-emerald-800 dark:text-emerald-300">Decision Recorded Successfully</div>
+            <p className="text-slate-600 dark:text-slate-300 text-[11px]">
               Your decision ({decisionRecorded.toUpperCase()}) has been cryptographically locked and recorded in the audit history.
             </p>
           </div>
         ) : isEligible ? (
-          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
-            <div className="font-semibold text-slate-200">Record Formal Client Response</div>
+          <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+            <div className="font-semibold text-slate-800 dark:text-slate-200">Record Formal Client Response</div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">Your Name</label>
+                <label className="block text-[11px] text-slate-600 dark:text-slate-400 mb-1">Your Name</label>
                 <input
                   type="text"
                   value={clientName}
                   onChange={(e) => setClientName(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500"
                 />
               </div>
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">Your Business Email</label>
+                <label className="block text-[11px] text-slate-600 dark:text-slate-400 mb-1">Your Business Email</label>
                 <input
                   type="email"
                   value={clientEmail}
                   onChange={(e) => setClientEmail(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-[11px] text-slate-400 mb-1">
+              <label className="block text-[11px] text-slate-600 dark:text-slate-400 mb-1">
                 Comments or Revision Notes (Optional)
               </label>
               <textarea
@@ -171,7 +171,7 @@ export const ClientReviewModal: React.FC<ClientReviewModalProps> = ({
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 placeholder="Include feedback, questions, or clarification requests..."
-                className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
+                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500"
               />
             </div>
 
@@ -180,7 +180,7 @@ export const ClientReviewModal: React.FC<ClientReviewModalProps> = ({
                 type="button"
                 disabled={isSubmitting}
                 onClick={() => handleDecision('rejected')}
-                className="px-3 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 hover:bg-rose-500/20 font-semibold text-xs transition"
+                className="px-3 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 hover:bg-rose-500/20 font-semibold text-xs transition"
               >
                 Reject Scope
               </button>
@@ -188,7 +188,7 @@ export const ClientReviewModal: React.FC<ClientReviewModalProps> = ({
                 type="button"
                 disabled={isSubmitting}
                 onClick={() => handleDecision('revision_requested')}
-                className="px-3 py-1.5 rounded-lg bg-orange-500/10 border border-orange-500/30 text-orange-300 hover:bg-orange-500/20 font-semibold text-xs transition"
+                className="px-3 py-1.5 rounded-lg bg-orange-500/10 border border-orange-500/30 text-orange-700 dark:text-orange-300 hover:bg-orange-500/20 font-semibold text-xs transition"
               >
                 Request Revision
               </button>
@@ -196,7 +196,7 @@ export const ClientReviewModal: React.FC<ClientReviewModalProps> = ({
                 type="button"
                 disabled={isSubmitting}
                 onClick={() => handleDecision('approved')}
-                className="px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition shadow-md shadow-emerald-950"
+                className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-md shadow-emerald-900/30"
               >
                 Approve & Authorize
               </button>
@@ -211,7 +211,7 @@ export const ClientReviewModal: React.FC<ClientReviewModalProps> = ({
         <div className="flex justify-end pt-1">
           <button
             onClick={onClose}
-            className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs"
+            className="px-4 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium transition"
           >
             Close Portal View
           </button>
