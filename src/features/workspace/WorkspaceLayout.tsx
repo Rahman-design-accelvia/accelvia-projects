@@ -46,10 +46,9 @@ import {
   FolderKanban,
   MessageSquare,
   PanelLeftClose,
-  PanelLeftOpen,
-  Sun,
-  Moon
+  PanelLeftOpen
 } from 'lucide-react';
+import { Sun, Moon } from '../../components/ThemeIcons';
 
 export const WorkspaceLayout: React.FC = () => {
   const { currentRole, setRole, currentUser, isSuperAdmin, isMember } = useAuth();
