@@ -291,3 +291,32 @@ export interface AuditEvent {
   server_recorded_at: string;
   source: string;
 }
+
+// Notification domain types
+export type NotificationCategory = 'conversation' | 'estimate_approved' | 'estimate_status' | 'system';
+export type NotificationPriority = 'low' | 'normal' | 'high';
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  body: string;
+  category: NotificationCategory;
+  priority?: NotificationPriority;
+  timestamp: string; // ISO-8601 string
+  read: boolean;
+  project_id?: string;
+  project_name?: string;
+  estimate_version_id?: string;
+  version_number?: number;
+  message_id?: string;
+  author_name?: string;
+  status_snapshot?: string;
+  url?: string;
+}
+
+export interface ToastNotification extends AppNotification {
+  toast_id: string;
+  created_at_ms: number;
+  dismissed?: boolean;
+}
+

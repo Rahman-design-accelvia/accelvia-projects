@@ -3,6 +3,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { ThemeProvider } from './features/theme/ThemeContext';
 import { AuthProvider } from './features/auth/AuthContext';
+import { NotificationProvider } from './features/notifications/NotificationContext';
 import { WorkspaceLayout } from './features/workspace/WorkspaceLayout';
 
 const container = document.getElementById('root');
@@ -15,8 +16,11 @@ root.render(
   <React.StrictMode>
     <ThemeProvider>
       <AuthProvider>
-        <WorkspaceLayout />
+        <NotificationProvider>
+          <WorkspaceLayout />
+        </NotificationProvider>
       </AuthProvider>
     </ThemeProvider>
   </React.StrictMode>
 );
+

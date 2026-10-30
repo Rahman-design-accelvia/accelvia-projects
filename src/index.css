@@ -142,3 +142,29 @@
 .overflow-y-auto, .overflow-x-auto {
   -webkit-overflow-scrolling: touch;
 }
+
+/* Push Notification Animations */
+@keyframes toast-shrink {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.animate-toast-shrink {
+  animation: toast-shrink 5.5s linear forwards;
+}
+
+@keyframes bell-wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  15%, 45% { transform: rotate(12deg); }
+  30%, 60% { transform: rotate(-12deg); }
+  75% { transform: rotate(0deg); }
+}
+
+.animate-wiggle {
+  animation: bell-wiggle 2.4s ease-in-out infinite;
+}
+

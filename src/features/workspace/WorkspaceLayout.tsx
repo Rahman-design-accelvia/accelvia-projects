@@ -49,10 +49,18 @@ import {
   PanelLeftOpen
 } from 'lucide-react';
 import { Sun, Moon } from '../../components/ThemeIcons';
+import { BellIcon, BellRingIcon } from '../../components/NotificationIcons';
+import { useNotifications } from '../notifications/NotificationContext';
+import { NotificationCenterDropdown } from '../notifications/NotificationCenterDropdown';
+import { PushToastContainer } from '../notifications/PushToastContainer';
 
 export const WorkspaceLayout: React.FC = () => {
   const { currentRole, setRole, currentUser, isSuperAdmin, isMember } = useAuth();
   const { theme, toggleTheme, isDark } = useTheme();
+  const { notify, unreadCount } = useNotifications();
+
+  // Notification center menu open state
+  const [isNotificationMenuOpen, setIsNotificationMenuOpen] = useState(false);
 
   // Primary state stores
   const [clients, setClients] = useState<Client[]>(SEED_CLIENTS);
@@ -198,6 +206,23 @@ export const WorkspaceLayout: React.FC = () => {
     setAuditEvents((a) => [auditEntry, ...a]);
   };
 
+  // Helper to extract text from Tiptap JSON document for push notification previews
+  const extractMessageSnippet = (contentJson: Record<string, unknown>): string => {
+    try {
+      const doc = contentJson as any;
+      if (Array.isArray(doc?.content)) {
+        const texts: string[] = [];
+        const recurse = (node: any) => {
+          if (node?.text) texts.push(node.text);
+          if (Array.isArray(node?.content)) node.content.forEach(recurse);
+        };
+        doc.content.forEach(recurse);
+        if (texts.length > 0) return texts.join(' ').trim();
+      }
+    } catch {}
+    return 'New message in conversation thread';
+  };
+
   const handleSendMessage = (contentJson: Record<string, unknown>, attachments: File[]) => {
     const newMsg: SafeMessage = {
       id: `msg-${Date.now()}`,
@@ -223,6 +248,17 @@ export const WorkspaceLayout: React.FC = () => {
       })),
     };
     setMessages((prev) => [...prev, newMsg]);
+
+    // Dispatch real-time web push notification for conversation message
+    const snippet = extractMessageSnippet(contentJson);
+    notify({
+      title: `💬 New Message (${currentUser.display_name})`,
+      body: snippet.length > 120 ? `${snippet.slice(0, 117)}...` : snippet,
+      category: 'conversation',
+      project_id: activeProject?.id,
+      project_name: activeProject?.name,
+      author_name: currentUser.display_name,
+    });
   };
 
   const handleEditMessage = (messageId: string, newText: string) => {
@@ -245,6 +281,15 @@ export const WorkspaceLayout: React.FC = () => {
           source: 'ui',
         };
         setAuditEvents((a) => [auditEntry, ...a]);
+
+        // Push notification for conversation revision
+        notify({
+          title: '✏️ Message Revised',
+          body: `A message was revised in ${activeProject?.name || 'Project'}: "${newText.length > 80 ? `${newText.slice(0, 77)}...` : newText}"`,
+          category: 'conversation',
+          project_id: activeProject?.id,
+          project_name: activeProject?.name,
+        });
 
         return {
           ...m,
@@ -279,6 +324,15 @@ export const WorkspaceLayout: React.FC = () => {
           source: 'ui',
         };
         setAuditEvents((a) => [auditEntry, ...a]);
+
+        // Push notification for message removal
+        notify({
+          title: '🗑️ Message Removed',
+          body: `A message was removed from the conversation in ${activeProject?.name || 'the project'}.`,
+          category: 'conversation',
+          project_id: activeProject?.id,
+          project_name: activeProject?.name,
+        });
 
         return {
           ...m,
@@ -369,6 +423,17 @@ export const WorkspaceLayout: React.FC = () => {
     };
 
     setVersions((prev) => [...prev, newVersion]);
+
+    // Push notification for drafted estimate
+    notify({
+      title: `📝 New Estimate Scope Drafted: v${verNumber}.0`,
+      body: `${totalHours.toFixed(1)} billable hrs allocated across ${items.length} deliverables in ${activeProject?.name || 'Project'}.`,
+      category: 'estimate_status',
+      project_id: selectedProjectId,
+      project_name: activeProject?.name,
+      estimate_version_id: newVersion.id,
+      version_number: verNumber,
+    });
   };
 
   const handleSendEstimate = (versionId: string, email: string, postToConversation: boolean = true) => {
@@ -402,6 +467,20 @@ export const WorkspaceLayout: React.FC = () => {
         return targetVer;
       })
     );
+
+    // Push notification for estimate status update (sent to client)
+    const verSnapshot = targetVer || versions.find((v) => v.id === versionId);
+    const verNum = verSnapshot?.version_number || 1;
+    const hrs = (verSnapshot?.total_hours_snapshot || 0).toFixed(1);
+    notify({
+      title: `📤 Estimate Sent to Client: v${verNum}.0`,
+      body: `Estimate Scope (${hrs} hrs) dispatched to ${email}. Status updated to Pending Client Review.`,
+      category: 'estimate_status',
+      project_id: selectedProjectId,
+      project_name: activeProject?.name,
+      estimate_version_id: versionId,
+      version_number: verNum,
+    });
 
     // If requested, post interactive estimate card to the conversation feed
     if (postToConversation) {
@@ -500,6 +579,22 @@ export const WorkspaceLayout: React.FC = () => {
       source: 'ui',
     };
     setAuditEvents((a) => [auditEntry, ...a]);
+
+    // 4. Dispatch Web Push notification for approved estimate
+    const targetVer = versions.find((v) => v.id === versionId);
+    const verNum = targetVer?.version_number || 1;
+    const hrs = (targetVer?.total_hours_snapshot || 0).toFixed(1);
+    const valText = targetVer?.total_usd_snapshot ? ` ($${targetVer.total_usd_snapshot.toLocaleString()} USD)` : '';
+    notify({
+      title: `🎉 Estimate Scope v${verNum}.0 Approved!`,
+      body: `Management approved ${hrs} billable hours${valText} for ${activeProject?.name || 'Project'}. Work order generation is unlocked.`,
+      category: 'estimate_approved',
+      priority: 'high',
+      project_id: selectedProjectId,
+      project_name: activeProject?.name,
+      estimate_version_id: versionId,
+      version_number: verNum,
+    });
   };
 
   const handleClientDecision = (
@@ -528,6 +623,43 @@ export const WorkspaceLayout: React.FC = () => {
           source: 'client_review',
         };
         setAuditEvents((a) => [auditEntry, ...a]);
+
+        // Trigger Web Push alert for client decision
+        const verNum = v.version_number;
+        if (decision === 'approved') {
+          notify({
+            title: `🎉 Client Authorized Scope Estimate: v${verNum}.0!`,
+            body: `${clientName} (${clientEmail}) authorized the estimate scope for ${activeProject?.name || 'Project'}.`,
+            category: 'estimate_approved',
+            priority: 'high',
+            project_id: selectedProjectId,
+            project_name: activeProject?.name,
+            estimate_version_id: versionId,
+            version_number: verNum,
+          });
+        } else if (decision === 'rejected') {
+          notify({
+            title: `❌ Client Rejected Scope Estimate: v${verNum}.0`,
+            body: `${clientName} rejected the estimate scope: "${comment || 'No reason provided'}"`,
+            category: 'estimate_status',
+            priority: 'high',
+            project_id: selectedProjectId,
+            project_name: activeProject?.name,
+            estimate_version_id: versionId,
+            version_number: verNum,
+          });
+        } else if (decision === 'revision_requested') {
+          notify({
+            title: `🔄 Scope Revision Requested: v${verNum}.0`,
+            body: `${clientName} requested adjustments on scope: "${comment || 'Revisions required'}"`,
+            category: 'estimate_status',
+            priority: 'normal',
+            project_id: selectedProjectId,
+            project_name: activeProject?.name,
+            estimate_version_id: versionId,
+            version_number: verNum,
+          });
+        }
 
         return {
           ...v,
@@ -582,6 +714,14 @@ export const WorkspaceLayout: React.FC = () => {
       source: 'ui',
     };
     setAuditEvents((a) => [auditEntry, ...a]);
+
+    notify({
+      title: `📄 Work Order Created: ${woNum}`,
+      body: `Generated for ${ver.total_hours_snapshot} hrs from approved estimate scope v${ver.version_number}.0.`,
+      category: 'estimate_status',
+      project_id: selectedProjectId,
+      project_name: activeProject?.name,
+    });
   };
 
   const handleUpdateWorkOrderStatus = (woId: string, status: any) => {
@@ -611,6 +751,14 @@ export const WorkspaceLayout: React.FC = () => {
         };
         setAuditEvents((a) => [auditEntry, ...a]);
 
+        notify({
+          title: `🚀 Work Order Status: ${String(status).toUpperCase()}`,
+          body: `${wo.work_order_number} progressed to ${status}.`,
+          category: 'estimate_status',
+          project_id: selectedProjectId,
+          project_name: activeProject?.name,
+        });
+
         return updated;
       })
     );
@@ -636,6 +784,14 @@ export const WorkspaceLayout: React.FC = () => {
           source: 'ui',
         };
         setAuditEvents((a) => [auditEntry, ...a]);
+
+        notify({
+          title: '⏱️ Business Event Time Corrected',
+          body: `Super Admin adjusted display event instant (Reason: ${reason}).`,
+          category: 'conversation',
+          project_id: selectedProjectId,
+          project_name: activeProject?.name,
+        });
 
         return {
           ...m,
@@ -736,8 +892,44 @@ export const WorkspaceLayout: React.FC = () => {
           <span>{topDualTime.bangladeshTime}</span>
         </div>
 
-        {/* Right Section: Theme Switcher, Role Switcher & User Profile */}
+        {/* Right Section: Push Notification Center, Theme Switcher, Role Switcher & User Profile */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* Push Notification Center Bell Button with live unread badge */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsNotificationMenuOpen(!isNotificationMenuOpen)}
+              className="relative p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition shadow-xs flex items-center justify-center"
+              title={unreadCount > 0 ? `${unreadCount} unread push notification${unreadCount > 1 ? 's' : ''}` : 'Notifications & Push Alerts'}
+              aria-label="Open notifications menu"
+            >
+              {unreadCount > 0 ? (
+                <BellRingIcon className="w-4 h-4 text-emerald-600 dark:text-teal-400 animate-wiggle" />
+              ) : (
+                <BellIcon className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+              )}
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-emerald-600 dark:bg-emerald-500 text-white text-[9px] font-bold font-mono px-1 min-w-[16px] h-4 rounded-full flex items-center justify-center shadow-xs">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+
+            {/* Notification Center Dropdown */}
+            <NotificationCenterDropdown
+              isOpen={isNotificationMenuOpen}
+              onClose={() => setIsNotificationMenuOpen(false)}
+              onSelectNotification={(notif) => {
+                setIsNotificationMenuOpen(false);
+                if (notif.category === 'estimate_approved' || notif.category === 'estimate_status') {
+                  setMobileTab('scope');
+                } else if (notif.category === 'conversation') {
+                  setMobileTab('chat');
+                }
+              }}
+            />
+          </div>
+
           {/* Theme Toggle Button (Light White & Green vs Dark Green & Dark) */}
           <button
             type="button"
@@ -1036,6 +1228,12 @@ export const WorkspaceLayout: React.FC = () => {
           onConfirmCorrection={handleConfirmCorrection}
         />
       )}
+
+      {/* Floating Web Push Toast Notifications Stack */}
+      <PushToastContainer
+        onNavigateToScope={() => setMobileTab('scope')}
+        onNavigateToChat={() => setMobileTab('chat')}
+      />
     </div>
   );
 };
