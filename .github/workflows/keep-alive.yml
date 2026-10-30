@@ -1,0 +1,59 @@
+name: Supabase Keep-Alive Ping
+
+# Automatically ping Supabase every 4 days to prevent free tier database inactivity auto-pausing
+on:
+  schedule:
+    # Runs at 06:00 UTC every 4 days (Day 1, 5, 9, 13, 17, 21, 25, 29 of each month)
+    - cron: '0 6 */4 * *'
+  workflow_dispatch:
+    # Allows manual trigger anytime from GitHub Actions tab
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/keep-alive.yml'
+
+jobs:
+  ping-supabase:
+    name: Ping Supabase Database & Auth API
+    runs-on: ubuntu-latest
+
+    env:
+      SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://vldeebwyoezoluptmnoh.supabase.co' }}
+      SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_XkFrqe5gtrOvcoBjh3z8YA_OKs-giVO' }}
+
+    steps:
+      - name: Send Keep-Alive Ping to Supabase API
+        run: |
+          echo "=========================================================="
+          echo "Sending keep-alive ping to Supabase: $SUPABASE_URL"
+          echo "Timestamp: $(date -u)"
+          echo "=========================================================="
+
+          # Ping Auth Service Health Endpoint
+          HTTP_CODE_HEALTH=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/auth/v1/health")
+
+          echo "Auth Health Endpoint Status Code: $HTTP_CODE_HEALTH"
+
+          # Ping Project Settings Endpoint
+          HTTP_CODE_SETTINGS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/auth/v1/settings")
+
+          echo "Auth Settings Endpoint Status Code: $HTTP_CODE_SETTINGS"
+
+          if [ "$HTTP_CODE_HEALTH" -eq 200 ] || [ "$HTTP_CODE_SETTINGS" -eq 200 ]; then
+            echo "=========================================================="
+            echo " SUCCESS: Supabase project is active and healthy!"
+            echo " 7-day inactivity pause counter has been successfully reset."
+            echo "=========================================================="
+            exit 0
+          else
+            echo "=========================================================="
+            echo " WARNING: Received unexpected status codes."
+            echo " Health: $HTTP_CODE_HEALTH, Settings: $HTTP_CODE_SETTINGS"
+            echo "=========================================================="
+            exit 1
+          fi
