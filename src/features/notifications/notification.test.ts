@@ -47,3 +47,4 @@ describe('WebPushService & Audio Chimes', () => {
     expect(testNotif.version_number).toBe(1);
   });
 });
+

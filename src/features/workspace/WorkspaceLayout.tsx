@@ -46,21 +46,28 @@ import {
   FolderKanban,
   MessageSquare,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  UserPlus,
+  LogOut,
+  Users
 } from 'lucide-react';
 import { Sun, Moon } from '../../components/ThemeIcons';
 import { BellIcon, BellRingIcon } from '../../components/NotificationIcons';
 import { useNotifications } from '../notifications/NotificationContext';
 import { NotificationCenterDropdown } from '../notifications/NotificationCenterDropdown';
 import { PushToastContainer } from '../notifications/PushToastContainer';
+import { LoginView } from '../auth/LoginView';
+import { TeamManagementModal } from '../auth/TeamManagementModal';
 
 export const WorkspaceLayout: React.FC = () => {
-  const { currentRole, setRole, currentUser, isSuperAdmin, isMember } = useAuth();
+  const { currentRole, setRole, currentUser, isSuperAdmin, isMember, isAuthenticated, logout } = useAuth();
   const { theme, toggleTheme, isDark } = useTheme();
   const { notify, unreadCount } = useNotifications();
 
-  // Notification center menu open state
+  // Navigation & dropdown states
   const [isNotificationMenuOpen, setIsNotificationMenuOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
 
   // Primary state stores
   const [clients, setClients] = useState<Client[]>(SEED_CLIENTS);
@@ -803,6 +810,11 @@ export const WorkspaceLayout: React.FC = () => {
 
   const reviewVersion = versions.find((v) => v.id === reviewVersionId) || null;
 
+  // Unauthenticated users see the Login Screen
+  if (!isAuthenticated) {
+    return <LoginView />;
+  }
+
   return (
     <div className="h-screen w-screen flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden text-slate-900 dark:text-slate-100 transition-colors">
       {/* Top Application Bar */}
@@ -999,17 +1011,66 @@ export const WorkspaceLayout: React.FC = () => {
             </select>
           </div>
 
-          {/* User Profile Pill */}
-          <div className="flex items-center gap-2 pl-1.5 sm:pl-2 border-l border-slate-200 dark:border-slate-800">
-            <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-slate-800 border border-emerald-200 dark:border-slate-700 flex items-center justify-center text-xs font-bold text-emerald-700 dark:text-teal-400 shrink-0">
-              {currentUser.display_name.charAt(0)}
-            </div>
-            <div className="hidden lg:block text-left text-xs">
-              <div className="font-semibold text-slate-800 dark:text-slate-200 leading-none truncate max-w-[90px]">
-                {currentUser.display_name}
+          {/* User Profile Pill & Dropdown Menu */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+              className="flex items-center gap-2 pl-1.5 sm:pl-2 border-l border-slate-200 dark:border-slate-800 hover:opacity-85 transition text-left cursor-pointer"
+              title="User Account Menu & Sign Out"
+            >
+              <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-slate-800 border border-emerald-200 dark:border-slate-700 flex items-center justify-center text-xs font-bold text-emerald-700 dark:text-teal-400 shrink-0">
+                {currentUser.display_name.charAt(0)}
               </div>
-              <div className="text-[10px] text-slate-500 capitalize">{currentRole.replace('_', ' ')}</div>
-            </div>
+              <div className="hidden lg:block text-left text-xs">
+                <div className="font-semibold text-slate-800 dark:text-slate-200 leading-none truncate max-w-[90px]">
+                  {currentUser.display_name}
+                </div>
+                <div className="text-[10px] text-slate-500 capitalize">{currentRole.replace('_', ' ')}</div>
+              </div>
+            </button>
+
+            {isUserMenuOpen && (
+              <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-3 z-50 text-xs text-slate-800 dark:text-slate-100 space-y-2.5 animate-in fade-in duration-150">
+                <div className="border-b border-slate-200 dark:border-slate-800 pb-2">
+                  <div className="font-bold text-slate-900 dark:text-slate-100">{currentUser.display_name}</div>
+                  <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400 truncate">{currentUser.email}</div>
+                  <div className="mt-1">
+                    <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                      {currentRole.replace('_', ' ')}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Super Admin Team Management Action */}
+                {isSuperAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      setIsTeamModalOpen(true);
+                    }}
+                    className="w-full text-left py-1.5 px-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-950/80 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-semibold flex items-center gap-2 transition"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>Manage Team (Add Admin/Member)</span>
+                  </button>
+                )}
+
+                {/* Sign Out Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    logout();
+                  }}
+                  className="w-full text-left py-1.5 px-2 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 font-semibold flex items-center gap-2 transition"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -1226,6 +1287,14 @@ export const WorkspaceLayout: React.FC = () => {
           message={timeCorrectionMessage}
           projectIanaTimezone={activeProject.timezone}
           onConfirmCorrection={handleConfirmCorrection}
+        />
+      )}
+
+      {/* Super Admin Team & Role Management Modal */}
+      {isSuperAdmin && (
+        <TeamManagementModal
+          isOpen={isTeamModalOpen}
+          onClose={() => setIsTeamModalOpen(false)}
         />
       )}
 
