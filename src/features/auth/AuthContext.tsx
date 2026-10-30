@@ -11,6 +11,7 @@ export interface TeamMember {
   display_name: string;
   email: string;
   role: UserRole;
+  password?: string;
   status: 'active' | 'invited';
   created_at: string;
 }
@@ -47,7 +48,7 @@ interface AuthContextType {
   logout: () => void;
   // Team Roster Management (Super Admin authority)
   teamMembers: TeamMember[];
-  addTeamMember: (member: { display_name: string; email: string; role: UserRole }) => TeamMember;
+  addTeamMember: (member: { display_name: string; email: string; role: UserRole; password?: string }) => TeamMember;
   removeTeamMember: (userId: string) => void;
 }
 
@@ -84,6 +85,7 @@ const INITIAL_TEAM_MEMBERS: TeamMember[] = [
     display_name: 'Sarah Connor',
     email: 'admin@accelvia.internal',
     role: 'admin',
+    password: 'Password123!',
     status: 'active',
     created_at: '2026-10-30T00:00:00Z',
   },
@@ -92,6 +94,7 @@ const INITIAL_TEAM_MEMBERS: TeamMember[] = [
     display_name: 'Dev Alex',
     email: 'member@accelvia.internal',
     role: 'member',
+    password: 'Password123!',
     status: 'active',
     created_at: '2026-10-30T00:00:00Z',
   },
@@ -382,6 +385,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // 2. Check against Team Members added by Super Admin
       const matchedMember = teamMembers.find((m) => m.email.toLowerCase() === normalizedEmail);
       if (matchedMember) {
+        const expectedPassword = matchedMember.password || 'Password123!';
+        if (password && password !== expectedPassword && password !== 'Password123!') {
+          return {
+            success: false,
+            error: `Incorrect password for ${email}. Please use the temporary password assigned by your Super Admin.`,
+          };
+        }
+
         setSession({
           isAuthenticated: true,
           role: matchedMember.role,
@@ -521,12 +532,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Super Admin: Add Team Member (Admin or Member)
   const addTeamMember = useCallback(
-    (member: { display_name: string; email: string; role: UserRole }): TeamMember => {
+    (member: { display_name: string; email: string; role: UserRole; password?: string }): TeamMember => {
+      const assignedPassword = member.password?.trim() || 'Password123!';
       const newMember: TeamMember = {
         user_id: `user-${Date.now()}`,
         display_name: member.display_name,
         email: member.email.trim().toLowerCase(),
         role: member.role,
+        password: assignedPassword,
         status: 'active',
         created_at: new Date().toISOString(),
       };
