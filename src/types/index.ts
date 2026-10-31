@@ -2,7 +2,7 @@
 // Accelvia Work Management System — Core Domain Types
 
 export type UserRole = 'super_admin' | 'admin' | 'member';
-export type AccountStatus = 'active' | 'invited' | 'suspended' | 'deactivated';
+export type AccountStatus = 'active' | 'invited' | 'pending_approval' | 'suspended' | 'deactivated';
 export type ClientStatus = 'active' | 'lead' | 'archived';
 export type ProjectStatus = 'active' | 'on_hold' | 'completed' | 'archived';
 export type PackageKind = 'initial' | 'additional';

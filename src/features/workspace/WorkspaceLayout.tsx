@@ -60,7 +60,7 @@ import { LoginView } from '../auth/LoginView';
 import { TeamManagementModal } from '../auth/TeamManagementModal';
 
 export const WorkspaceLayout: React.FC = () => {
-  const { currentRole, setRole, currentUser, isSuperAdmin, isMember, isAuthenticated, logout } = useAuth();
+  const { currentRole, setRole, currentUser, isSuperAdmin, isMember, isAuthenticated, logout, pendingRegistrations } = useAuth();
   const { theme, toggleTheme, isDark } = useTheme();
   const { notify, unreadCount } = useNotifications();
 
@@ -1011,6 +1011,20 @@ export const WorkspaceLayout: React.FC = () => {
             </select>
           </div>
 
+          {/* Super Admin Pending Registrations Quick Pill */}
+          {isSuperAdmin && pendingRegistrations.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setIsTeamModalOpen(true)}
+              className="px-2 sm:px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-700 dark:text-amber-300 font-bold text-xs flex items-center gap-1.5 animate-pulse cursor-pointer shadow-xs"
+              title="Review and approve pending user registrations"
+            >
+              <Clock className="w-3.5 h-3.5 text-amber-500" />
+              <span className="hidden sm:inline">{pendingRegistrations.length} Pending Approval{pendingRegistrations.length > 1 ? 's' : ''}</span>
+              <span className="sm:hidden">{pendingRegistrations.length}</span>
+            </button>
+          )}
+
           {/* User Profile Pill & Dropdown Menu */}
           <div className="relative">
             <button
@@ -1050,10 +1064,17 @@ export const WorkspaceLayout: React.FC = () => {
                       setIsUserMenuOpen(false);
                       setIsTeamModalOpen(true);
                     }}
-                    className="w-full text-left py-1.5 px-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-950/80 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-semibold flex items-center gap-2 transition"
+                    className="w-full text-left py-1.5 px-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-950/80 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-semibold flex items-center justify-between transition cursor-pointer"
                   >
-                    <UserPlus className="w-3.5 h-3.5" />
-                    <span>Manage Team (Add Admin/Member)</span>
+                    <div className="flex items-center gap-2">
+                      <Users className="w-3.5 h-3.5" />
+                      <span>Team & Approvals</span>
+                    </div>
+                    {pendingRegistrations.length > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-rose-500 text-white font-mono font-bold animate-pulse">
+                        {pendingRegistrations.length}
+                      </span>
+                    )}
                   </button>
                 )}
 

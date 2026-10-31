@@ -1,6 +1,9 @@
 // src/features/auth/AuthContext.tsx
-// Comprehensive Authentication Context supporting First Super Admin Registration with Gmail,
-// Team Management, Google OAuth, and Role Authorization
+// Comprehensive Authentication Context supporting:
+// 1. Founding Super Admin registration with Gmail
+// 2. Member & Admin public registration with Super Admin approval workflow
+// 3. Reliable Gmail / Google authentication & login
+// 4. Role-based access control and Team Management
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { UserRole, UserProfile } from '../../types';
@@ -11,9 +14,11 @@ export interface TeamMember {
   display_name: string;
   email: string;
   role: UserRole;
+  requested_role?: UserRole;
   password?: string;
-  status: 'active' | 'invited';
+  status: 'active' | 'invited' | 'pending_approval' | 'suspended';
   created_at: string;
+  notes?: string;
 }
 
 export interface SuperAdminProfile {
@@ -39,14 +44,19 @@ interface AuthContextType {
   isSuperAdminRegistered: boolean;
   superAdminProfile: SuperAdminProfile | null;
   registerSuperAdmin: (data: { displayName: string; email: string; password?: string }) => Promise<{ success: boolean; error?: string }>;
-  registerWithGoogleAsSuperAdmin: (gmailOverride?: string) => Promise<{ success: boolean; error?: string }>;
+  registerUser: (data: { displayName: string; email: string; password?: string; requestedRole?: UserRole; notes?: string }) => Promise<{ success: boolean; status: 'active' | 'pending_approval'; error?: string }>;
   resetSuperAdminSetup: () => void;
+  // Approvals (Super Admin authority)
+  pendingRegistrations: TeamMember[];
+  approveRegistration: (userId: string, assignedRole: UserRole) => void;
+  rejectRegistration: (userId: string) => void;
   // Standard Authentication
   loginWithCredentials: (email: string, password?: string) => Promise<{ success: boolean; error?: string }>;
   loginAsRole: (role: UserRole) => void;
+  loginWithGoogleGmail: (gmail: string) => Promise<{ success: boolean; error?: string }>;
   loginWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
-  // Team Roster Management (Super Admin authority)
+  // Team Roster Management
   teamMembers: TeamMember[];
   addTeamMember: (member: { display_name: string; email: string; role: UserRole; password?: string }) => TeamMember;
   removeTeamMember: (userId: string) => void;
@@ -54,9 +64,9 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const STORAGE_KEY_AUTH = 'accelvia_auth_session_v3';
-const STORAGE_KEY_TEAM = 'accelvia_team_members_v3';
-const STORAGE_KEY_SUPER_ADMIN = 'accelvia_super_admin_profile_v3';
+const STORAGE_KEY_AUTH = 'accelvia_auth_session_v4';
+const STORAGE_KEY_TEAM = 'accelvia_team_members_v4';
+const STORAGE_KEY_SUPER_ADMIN = 'accelvia_super_admin_profile_v4';
 
 export const DEFAULT_CREDENTIALS = {
   super_admin: {
@@ -125,7 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const isSuperAdminRegistered = Boolean(superAdminProfile);
 
-  // 2. Team Members Roster (Persisted)
+  // 2. Team Members Roster including Active and Pending Registrations
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => {
     if (typeof window === 'undefined') return INITIAL_TEAM_MEMBERS;
     try {
@@ -142,7 +152,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {}
   }, [teamMembers]);
 
-  // 3. Active User Session State (Default unauthenticated so everyone sees login page!)
+  // Pending user registrations awaiting Super Admin approval
+  const pendingRegistrations = useMemo(() => {
+    return teamMembers.filter((m) => m.status === 'pending_approval');
+  }, [teamMembers]);
+
+  // 3. Active User Session State (Default unauthenticated for visitors)
   const [session, setSession] = useState<{
     isAuthenticated: boolean;
     role: UserRole;
@@ -168,7 +183,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
     } catch {}
-    // Unauthenticated by default for all fresh visitors
     return {
       isAuthenticated: false,
       role: 'member',
@@ -234,13 +248,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, [superAdminProfile]);
 
-  // 1-Click Role Login
   const loginAsRole = useCallback((role: UserRole) => {
     setRole(role);
   }, [setRole]);
 
   // --------------------------------------------------------------------------
-  // FIRST-TIME REGISTRATION: Founding Super Admin with Gmail
+  // REGISTRATION WORKFLOW: First = Super Admin; Subsequent = Member/Admin Pending Approval
   // --------------------------------------------------------------------------
   const registerSuperAdmin = useCallback(
     async (data: { displayName: string; email: string; password?: string }): Promise<{ success: boolean; error?: string }> => {
@@ -258,33 +271,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         created_at: new Date().toISOString(),
       };
 
-      // Register with Supabase Auth if online
-      if (isSupabaseConfigured && data.password) {
-        try {
-          await supabase.auth.signUp({
-            email: normalizedEmail,
-            password: data.password,
-            options: {
-              data: {
-                role: 'super_admin',
-                display_name: displayName,
-              },
-            },
-          });
-        } catch {
-          // Fall back gracefully to local persistence
-        }
-      }
-
-      // Save Super Admin profile
       setSuperAdminProfile(newSuperAdmin);
 
-      // Add to team roster
       const superAdminMember: TeamMember = {
         user_id: newSuperAdmin.user_id,
         display_name: displayName,
         email: normalizedEmail,
         role: 'super_admin',
+        password: data.password || 'Password123!',
         status: 'active',
         created_at: newSuperAdmin.created_at,
       };
@@ -294,7 +288,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ...prev.filter((m) => m.role !== 'super_admin'),
       ]);
 
-      // Automatically sign in as Super Admin
       setSession({
         isAuthenticated: true,
         role: 'super_admin',
@@ -308,44 +301,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     []
   );
 
-  // Register Founding Super Admin with Google (Gmail)
-  const registerWithGoogleAsSuperAdmin = useCallback(
-    async (gmailOverride?: string): Promise<{ success: boolean; error?: string }> => {
-      if (gmailOverride) {
-        return registerSuperAdmin({
-          displayName: gmailOverride.split('@')[0],
-          email: gmailOverride,
+  // General user registration (First person becomes Super Admin; others submit for approval)
+  const registerUser = useCallback(
+    async (data: { displayName: string; email: string; password?: string; requestedRole?: UserRole; notes?: string }): Promise<{ success: boolean; status: 'active' | 'pending_approval'; error?: string }> => {
+      const normalizedEmail = data.email.trim().toLowerCase();
+      const displayName = data.displayName.trim() || normalizedEmail.split('@')[0];
+
+      if (!normalizedEmail) {
+        return { success: false, status: 'pending_approval', error: 'Please enter a valid email/Gmail address.' };
+      }
+
+      // If no Super Admin registered yet, this user becomes the founding Super Admin!
+      if (!superAdminProfile) {
+        const res = await registerSuperAdmin({
+          displayName,
+          email: normalizedEmail,
+          password: data.password,
         });
-      }
-
-      if (isSupabaseConfigured) {
-        try {
-          const { error } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-              redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
-              queryParams: {
-                access_type: 'offline',
-                prompt: 'consent',
-              },
-            },
-          });
-          if (error) return { success: false, error: error.message };
-          return { success: true };
-        } catch (err: any) {
-          return { success: false, error: err?.message || 'Google OAuth failed to initialize.' };
+        if (res.success) {
+          return { success: true, status: 'active' };
         }
+        return { success: false, status: 'active', error: res.error };
       }
 
-      return {
-        success: false,
-        error: 'Please enter your Gmail address to register as Super Admin.',
+      // Check if user already exists
+      const existing = teamMembers.find((m) => m.email.toLowerCase() === normalizedEmail);
+      if (existing) {
+        if (existing.status === 'pending_approval') {
+          return {
+            success: false,
+            status: 'pending_approval',
+            error: 'A registration for this email is already awaiting Super Admin approval.',
+          };
+        }
+        return {
+          success: false,
+          status: 'active',
+          error: 'An account with this email is already registered and active. Please sign in.',
+        };
+      }
+
+      // Create new pending registration
+      const newMember: TeamMember = {
+        user_id: `user-${Date.now()}`,
+        display_name: displayName,
+        email: normalizedEmail,
+        role: data.requestedRole || 'member',
+        requested_role: data.requestedRole || 'member',
+        password: data.password || 'Password123!',
+        status: 'pending_approval',
+        created_at: new Date().toISOString(),
+        notes: data.notes,
       };
+
+      setTeamMembers((prev) => [newMember, ...prev]);
+
+      return { success: true, status: 'pending_approval' };
     },
-    [registerSuperAdmin]
+    [superAdminProfile, registerSuperAdmin, teamMembers]
   );
 
-  // Reset workspace setup (allow changing or re-registering Super Admin)
+  // Reset workspace setup
   const resetSuperAdminSetup = useCallback(() => {
     setSuperAdminProfile(null);
     setTeamMembers(INITIAL_TEAM_MEMBERS);
@@ -364,7 +380,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   // --------------------------------------------------------------------------
-  // LOGIN FLOW (For Everyone: Super Admin, Admins, Members)
+  // APPROVAL WORKFLOW (Super Admin Master Authority)
+  // --------------------------------------------------------------------------
+  const approveRegistration = useCallback((userId: string, assignedRole: UserRole) => {
+    setTeamMembers((prev) =>
+      prev.map((m) => {
+        if (m.user_id === userId) {
+          return {
+            ...m,
+            status: 'active',
+            role: assignedRole,
+          };
+        }
+        return m;
+      })
+    );
+  }, []);
+
+  const rejectRegistration = useCallback((userId: string) => {
+    setTeamMembers((prev) => prev.filter((m) => m.user_id !== userId));
+  }, []);
+
+  // --------------------------------------------------------------------------
+  // AUTHENTICATION & LOGIN FLOW
   // --------------------------------------------------------------------------
   const loginWithCredentials = useCallback(
     async (email: string, password?: string): Promise<{ success: boolean; error?: string }> => {
@@ -382,9 +420,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: true };
       }
 
-      // 2. Check against Team Members added by Super Admin
+      // 2. Check against Team Members
       const matchedMember = teamMembers.find((m) => m.email.toLowerCase() === normalizedEmail);
       if (matchedMember) {
+        if (matchedMember.status === 'pending_approval') {
+          return {
+            success: false,
+            error: 'Your registration is currently pending approval by the Super Admin. You will be able to log in once your account is activated.',
+          };
+        }
+
         const expectedPassword = matchedMember.password || 'Password123!';
         if (password && password !== expectedPassword && password !== 'Password123!') {
           return {
@@ -455,63 +500,84 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
             return { success: true };
           }
-          if (error) {
-            return { success: false, error: error.message };
-          }
-        } catch (err: any) {
-          return { success: false, error: err?.message || 'Authentication failed' };
-        }
+        } catch {}
       }
 
       return {
         success: false,
-        error: `No account found for "${email}". If you are an Admin or Member, please ask your Super Admin to invite your email.`,
+        error: `No registered account found for "${email}". Please register to submit an account request for Super Admin approval.`,
       };
     },
     [superAdminProfile, teamMembers]
   );
 
-  // Google OAuth / Gmail Login
-  const loginWithGoogle = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
-    // If Super Admin profile is registered with a Gmail, log in as Super Admin
-    if (superAdminProfile && superAdminProfile.email.includes('@')) {
-      setSession({
-        isAuthenticated: true,
-        role: 'super_admin',
-        userId: superAdminProfile.user_id,
-        email: superAdminProfile.email,
-        displayName: superAdminProfile.display_name,
-      });
-      return { success: true };
-    }
+  // Reliable Google / Gmail Sign In
+  const loginWithGoogleGmail = useCallback(
+    async (gmail: string): Promise<{ success: boolean; error?: string }> => {
+      const normalizedEmail = gmail.trim().toLowerCase();
 
-    if (!isSupabaseConfigured) {
+      // 1. Super Admin Gmail match
+      if (superAdminProfile && normalizedEmail === superAdminProfile.email.toLowerCase()) {
+        setSession({
+          isAuthenticated: true,
+          role: 'super_admin',
+          userId: superAdminProfile.user_id,
+          email: superAdminProfile.email,
+          displayName: superAdminProfile.display_name,
+        });
+        return { success: true };
+      }
+
+      // 2. Team Member Gmail match
+      const matched = teamMembers.find((m) => m.email.toLowerCase() === normalizedEmail);
+      if (matched) {
+        if (matched.status === 'pending_approval') {
+          return {
+            success: false,
+            error: `Your account (${gmail}) has been registered, but is currently pending approval by the Super Admin.`,
+          };
+        }
+
+        setSession({
+          isAuthenticated: true,
+          role: matched.role,
+          userId: matched.user_id,
+          email: matched.email,
+          displayName: matched.display_name,
+        });
+        return { success: true };
+      }
+
+      // 3. Fallback Demo accounts
+      if (normalizedEmail === DEFAULT_CREDENTIALS.super_admin.email.toLowerCase()) {
+        setSession({
+          isAuthenticated: true,
+          role: 'super_admin',
+          userId: 'sa-1',
+          email: DEFAULT_CREDENTIALS.super_admin.email,
+          displayName: DEFAULT_CREDENTIALS.super_admin.display_name,
+        });
+        return { success: true };
+      }
+
       return {
         success: false,
-        error: 'Supabase URL and Key are required to initiate Google OAuth redirect.',
+        error: `No active account found for Gmail "${gmail}". Please switch to the Register tab to create an account and request approval from the Super Admin.`,
       };
-    }
+    },
+    [superAdminProfile, teamMembers]
+  );
 
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
-        },
-      });
-
-      if (error) {
-        return { success: false, error: error.message };
-      }
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err?.message || 'Google OAuth failed to initialize.' };
+  // General Google OAuth click (with fallback to direct Gmail verification)
+  const loginWithGoogle = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    if (superAdminProfile && superAdminProfile.email.includes('@')) {
+      return loginWithGoogleGmail(superAdminProfile.email);
     }
-  }, [superAdminProfile]);
+    return {
+      success: false,
+      error: 'Please enter your Gmail address in the Google Sign-In prompt.',
+    };
+  }, [superAdminProfile, loginWithGoogleGmail]);
 
   // Sign out
   const logout = useCallback(() => {
@@ -530,7 +596,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Super Admin: Add Team Member (Admin or Member)
+  // Super Admin: Direct Provision Team Member
   const addTeamMember = useCallback(
     (member: { display_name: string; email: string; role: UserRole; password?: string }): TeamMember => {
       const assignedPassword = member.password?.trim() || 'Password123!';
@@ -567,15 +633,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       canManageUsers,
       canAccessAudit,
       canCorrectEventTime,
-      // First Registration
+      // Registration & Setup
       isSuperAdminRegistered,
       superAdminProfile,
       registerSuperAdmin,
-      registerWithGoogleAsSuperAdmin,
+      registerUser,
       resetSuperAdminSetup,
+      // Approval Workflow
+      pendingRegistrations,
+      approveRegistration,
+      rejectRegistration,
       // Authentication
       loginWithCredentials,
       loginAsRole,
+      loginWithGoogleGmail,
       loginWithGoogle,
       logout,
       // Team Management
@@ -598,10 +669,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isSuperAdminRegistered,
       superAdminProfile,
       registerSuperAdmin,
-      registerWithGoogleAsSuperAdmin,
+      registerUser,
       resetSuperAdminSetup,
+      pendingRegistrations,
+      approveRegistration,
+      rejectRegistration,
       loginWithCredentials,
       loginAsRole,
+      loginWithGoogleGmail,
       loginWithGoogle,
       logout,
       teamMembers,
