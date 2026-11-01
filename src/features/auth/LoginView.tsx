@@ -301,8 +301,24 @@ export const LoginView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setGoogleModalMode('signin');
-                    setShowGoogleModal(true);
+                    const targetEmail = email.trim();
+                    if (targetEmail && targetEmail.includes('@')) {
+                      setIsLoading(true);
+                      setErrorMessage(null);
+                      loginWithGoogleGmail(targetEmail).then((res) => {
+                        setIsLoading(false);
+                        if (!res.success) {
+                          setGoogleGmailInput(targetEmail);
+                          setGoogleModalMode('signin');
+                          setShowGoogleModal(true);
+                          setErrorMessage(res.error || null);
+                        }
+                      });
+                    } else {
+                      setGoogleGmailInput('');
+                      setGoogleModalMode('signin');
+                      setShowGoogleModal(true);
+                    }
                   }}
                   disabled={isLoading}
                   className="w-full py-2.5 px-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 font-semibold text-xs sm:text-sm flex items-center justify-center gap-3 transition shadow-xs text-slate-700 dark:text-slate-200"
