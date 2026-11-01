@@ -71,7 +71,7 @@ const STORAGE_KEY_SUPER_ADMIN = 'accelvia_super_admin_profile_v5';
 export const DEFAULT_CREDENTIALS = {
   super_admin: {
     email: 'gravityahmed11@gmail.com',
-    password: 'Password123!',
+    password: 'Alpha@@2026',
     display_name: 'Super Admin (Ahmed)',
     role: 'super_admin' as UserRole,
   },
@@ -95,7 +95,7 @@ const INITIAL_TEAM_MEMBERS: TeamMember[] = [
     display_name: 'Super Admin (Ahmed)',
     email: 'gravityahmed11@gmail.com',
     role: 'super_admin',
-    password: 'Password123!',
+    password: 'Alpha@@2026',
     status: 'active',
     created_at: '2026-10-30T00:00:00Z',
   },
@@ -122,7 +122,7 @@ const INITIAL_TEAM_MEMBERS: TeamMember[] = [
     display_name: 'Executive Director',
     email: 'superadmin@accelvia.internal',
     role: 'super_admin',
-    password: 'Password123!',
+    password: 'Alpha@@2026',
     status: 'active',
     created_at: '2026-10-30T00:00:00Z',
   },
