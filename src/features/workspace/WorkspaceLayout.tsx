@@ -1,5 +1,5 @@
 // src/features/workspace/WorkspaceLayout.tsx
-// Core Three-Panel Workspace Layout with live state management and developer role switcher
+// Core Three-Panel Workspace Layout with live state management
 
 import React, { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
@@ -60,7 +60,7 @@ import { LoginView } from '../auth/LoginView';
 import { TeamManagementModal } from '../auth/TeamManagementModal';
 
 export const WorkspaceLayout: React.FC = () => {
-  const { currentRole, setRole, currentUser, isSuperAdmin, isMember, isAuthenticated, logout, pendingRegistrations } = useAuth();
+  const { currentRole, currentUser, isSuperAdmin, isMember, isAuthenticated, logout, pendingRegistrations } = useAuth();
   const { theme, toggleTheme, isDark } = useTheme();
   const { notify, unreadCount } = useNotifications();
 
@@ -957,59 +957,7 @@ export const WorkspaceLayout: React.FC = () => {
             )}
           </button>
 
-          {/* Desktop/Tablet segmented role buttons */}
-          <div className="hidden sm:flex items-center gap-1 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-1 text-xs">
-            <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 px-1.5 hidden md:inline">Role:</span>
-            <button
-              onClick={() => setRole('super_admin')}
-              className={`px-2 py-0.5 rounded font-semibold text-xs transition ${
-                currentRole === 'super_admin'
-                  ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/40 font-bold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
-            >
-              Super Admin
-            </button>
-            <button
-              onClick={() => setRole('admin')}
-              className={`px-2 py-0.5 rounded font-semibold text-xs transition ${
-                currentRole === 'admin'
-                  ? 'bg-emerald-100 dark:bg-teal-500/20 text-emerald-800 dark:text-teal-300 border border-emerald-300 dark:border-teal-500/40 font-bold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
-            >
-              Admin
-            </button>
-            <button
-              onClick={() => setRole('member')}
-              className={`px-2 py-0.5 rounded font-semibold text-xs transition ${
-                currentRole === 'member'
-                  ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-500/40 font-bold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
-            >
-              Member
-            </button>
-          </div>
 
-          {/* Mobile Role Switcher Select (< sm) */}
-          <div className="sm:hidden">
-            <select
-              value={currentRole}
-              onChange={(e) => setRole(e.target.value as any)}
-              className={`text-[11px] font-bold rounded-lg px-2 py-1 border focus:outline-none transition ${
-                currentRole === 'super_admin'
-                  ? 'bg-amber-50 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-500/50'
-                  : currentRole === 'admin'
-                  ? 'bg-emerald-50 dark:bg-teal-950/80 text-emerald-800 dark:text-teal-300 border-emerald-300 dark:border-teal-500/50'
-                  : 'bg-blue-50 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 border-blue-300 dark:border-blue-500/50'
-              }`}
-            >
-              <option value="super_admin" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Super Admin</option>
-              <option value="admin" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Admin</option>
-              <option value="member" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">Member</option>
-            </select>
-          </div>
 
           {/* Super Admin Pending Registrations Quick Pill */}
           {isSuperAdmin && pendingRegistrations.length > 0 && (
