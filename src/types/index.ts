@@ -169,6 +169,18 @@ export interface SafeMessage {
     approved_by_name?: string;
     approved_at?: string;
   } | null;
+  work_order_card?: {
+    work_order_id: string;
+    work_order_number: string;
+    package_title: string;
+    hours_snapshot: number;
+    total_usd_snapshot?: number | null;
+    total_bdt_snapshot?: number | null;
+    status: WorkOrderStatus;
+    authorized_by: string;
+    generated_at: string;
+    items?: Array<{ title: string; hours: number }>;
+  } | null;
 }
 
 export interface ScopePackage {

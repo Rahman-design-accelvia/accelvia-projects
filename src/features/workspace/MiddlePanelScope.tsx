@@ -46,6 +46,7 @@ interface MiddlePanelScopeProps {
   onGenerateWorkOrder: (versionId: string, kind: 'detailed' | 'summary') => void;
   onUpdateWorkOrderStatus: (woId: string, status: any) => void;
   onOpenClientReviewModal: (versionId: string) => void;
+  onMarkComplete?: () => void;
   onBackToProjects?: () => void;
 }
 
@@ -62,6 +63,7 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
   onGenerateWorkOrder,
   onUpdateWorkOrderStatus,
   onOpenClientReviewModal,
+  onMarkComplete,
   onBackToProjects,
 }) => {
   const { canViewMoney, isSuperAdmin, isMember } = useAuth();
@@ -205,16 +207,38 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
             </div>
           </div>
 
-          {canViewMoney && (
-            <button
-              onClick={() => setIsFinModalOpen(true)}
-              className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 dark:border-transparent dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 transition flex items-center gap-1 text-xs shrink-0"
-              title="Project Financial Rates & Budgets (Confidential)"
-            >
-              <Sliders className="w-3.5 h-3.5 text-emerald-600 dark:text-teal-400" />
-              <span>Rates</span>
-            </button>
-          )}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {project.status === 'completed' ? (
+              <span className="px-2 py-1 rounded-lg bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 font-bold text-xs flex items-center gap-1 border border-emerald-300 dark:border-emerald-800">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-teal-400" />
+                <span>Completed</span>
+              </span>
+            ) : (
+              canViewMoney && onMarkComplete && (
+                <button
+                  type="button"
+                  onClick={onMarkComplete}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1 transition shadow-xs"
+                  title="Manually confirm and mark this project as completed"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Complete Project</span>
+                  <span className="sm:hidden">Complete</span>
+                </button>
+              )
+            )}
+
+            {canViewMoney && (
+              <button
+                onClick={() => setIsFinModalOpen(true)}
+                className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 dark:border-transparent dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 transition flex items-center gap-1 text-xs"
+                title="Project Financial Rates & Budgets (Confidential)"
+              >
+                <Sliders className="w-3.5 h-3.5 text-emerald-600 dark:text-teal-400" />
+                <span>Rates</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Aggregated Hours & Monetary KPI Cards */}

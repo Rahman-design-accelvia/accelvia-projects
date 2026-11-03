@@ -49,7 +49,8 @@ import {
   PanelLeftOpen,
   UserPlus,
   LogOut,
-  Users
+  Users,
+  CheckCircle2
 } from 'lucide-react';
 import { Sun, Moon } from '../../components/ThemeIcons';
 import { BellIcon, BellRingIcon } from '../../components/NotificationIcons';
@@ -58,6 +59,9 @@ import { NotificationCenterDropdown } from '../notifications/NotificationCenterD
 import { PushToastContainer } from '../notifications/PushToastContainer';
 import { LoginView } from '../auth/LoginView';
 import { TeamManagementModal } from '../auth/TeamManagementModal';
+import { Modal } from '../../components/Modal';
+import { ProjectCalendarModal } from '../calendar/ProjectCalendarModal';
+import { Calendar as CalendarIcon } from 'lucide-react';
 
 export const WorkspaceLayout: React.FC = () => {
   const { currentRole, currentUser, isSuperAdmin, isMember, isAuthenticated, logout, pendingRegistrations } = useAuth();
@@ -85,6 +89,23 @@ export const WorkspaceLayout: React.FC = () => {
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [reviewVersionId, setReviewVersionId] = useState<string | null>(null);
   const [timeCorrectionMessage, setTimeCorrectionMessage] = useState<SafeMessage | null>(null);
+
+  // Feature 1: Mark Project Complete dialog state
+  const [isMarkCompleteDialogOpen, setIsMarkCompleteDialogOpen] = useState(false);
+
+  // Feature 4: Project Calendar & Master Work Orders Hub
+  const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
+
+  // Feature 3: Additional estimate budget confirmation dialog state
+  const [budgetUpdateDialog, setBudgetUpdateDialog] = useState<{
+    isOpen: boolean;
+    newAdditionalHours: number;
+    currentBudgetHours: number | null;
+    suggestedTotal: number;
+    versionId: string;
+    packageTitle: string;
+    confirmedHours: number;
+  } | null>(null);
 
   // Responsive view & collapsible panel state
   const [mobileTab, setMobileTab] = useState<'projects' | 'scope' | 'chat'>('chat');
@@ -633,6 +654,25 @@ export const WorkspaceLayout: React.FC = () => {
       estimate_version_id: versionId,
       version_number: verNum,
     });
+
+    // 5. Feature 3: If this is an additional scope package, prompt admin to confirm new budget total
+    if (targetVer) {
+      const scopePkg = packages.find((p) => p.id === targetVer.scope_package_id);
+      if (scopePkg && scopePkg.package_kind === 'additional') {
+        const currentBudgetHours = activeFinancials?.internal_budget_hours ?? 0;
+        const additionalHours = targetVer.total_hours_snapshot;
+        const suggestedTotal = (currentBudgetHours ?? 0) + additionalHours;
+        setBudgetUpdateDialog({
+          isOpen: true,
+          newAdditionalHours: additionalHours,
+          currentBudgetHours: activeFinancials?.internal_budget_hours ?? null,
+          suggestedTotal,
+          versionId,
+          packageTitle: scopePkg.title,
+          confirmedHours: suggestedTotal,
+        });
+      }
+    }
   };
 
   const handleClientDecision = (
@@ -760,6 +800,50 @@ export const WorkspaceLayout: React.FC = () => {
       project_id: selectedProjectId,
       project_name: activeProject?.name,
     });
+
+    // Post a work_order_card message to the conversation thread (Feature 2)
+    const pkg = packages.find((p) => p.id === ver.scope_package_id);
+    const totalHoursFormatted = ver.total_hours_snapshot;
+    const woConversationMsg: SafeMessage = {
+      id: `msg-${Date.now()}-wo`,
+      conversation_id: 'conv-1',
+      author_id: currentUser.user_id,
+      author_name: currentUser.display_name,
+      author_is_management: isSuperAdmin,
+      content_json: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              {
+                type: 'text',
+                text: `📄 Work Order ${woNum} has been generated and is ready for delivery. Total: ${totalHoursFormatted}h`,
+              },
+            ],
+          },
+        ],
+      },
+      event_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      is_edited: false,
+      is_deleted: false,
+      attachments: [],
+      work_order_card: {
+        work_order_id: newWo.id,
+        work_order_number: woNum,
+        package_title: pkg?.title || 'Scope Package',
+        hours_snapshot: ver.total_hours_snapshot,
+        total_usd_snapshot: ver.total_usd_snapshot,
+        total_bdt_snapshot: ver.total_bdt_snapshot,
+        status: newWo.status,
+        authorized_by: currentUser.display_name,
+        generated_at: newWo.generated_at,
+        items: ver.items?.map((it) => ({ title: it.title, hours: it.hours })),
+      },
+    };
+    setMessages((prev) => [...prev, woConversationMsg]);
   };
 
   const handleUpdateWorkOrderStatus = (woId: string, status: any) => {
@@ -800,6 +884,60 @@ export const WorkspaceLayout: React.FC = () => {
         return updated;
       })
     );
+
+    // Also update work_order_card status in conversation messages
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.work_order_card?.work_order_id === woId) {
+          return {
+            ...m,
+            work_order_card: {
+              ...m.work_order_card!,
+              status: status as any,
+            },
+          };
+        }
+        return m;
+      })
+    );
+  };
+
+  // Feature 1: Mark active project as completed (Admin-only, manual confirmation)
+  const handleMarkProjectComplete = () => {
+    if (!activeProject) return;
+
+    setProjects((prev) =>
+      prev.map((p) => {
+        if (p.id !== activeProject.id) return p;
+        return { ...p, status: 'completed' as const, updated_at: new Date().toISOString() };
+      })
+    );
+
+    const auditEntry: AuditEvent = {
+      id: `audit-${Date.now()}`,
+      organization_id: 'org-1',
+      actor_user_id: currentUser.user_id,
+      actor_role_snapshot: currentRole,
+      entity_type: 'projects',
+      entity_id: activeProject.id,
+      action: 'MARK_PROJECT_COMPLETED',
+      before_state: { status: 'active' },
+      after_state: { status: 'completed' },
+      reason: 'Admin manually confirmed project completion',
+      server_recorded_at: new Date().toISOString(),
+      source: 'ui',
+    };
+    setAuditEvents((a) => [auditEntry, ...a]);
+
+    notify({
+      title: `🎉 Project Completed: ${activeProject.name}`,
+      body: `Admin manually confirmed project completion for ${activeProject.name}.`,
+      category: 'system',
+      project_id: activeProject.id,
+      project_name: activeProject.name,
+    });
+
+    setIsMarkCompleteDialogOpen(false);
   };
 
   const handleConfirmCorrection = (messageId: string, newIsoString: string, reason: string) => {
@@ -937,6 +1075,17 @@ export const WorkspaceLayout: React.FC = () => {
 
         {/* Right Section: Push Notification Center, Theme Switcher, Role Switcher & User Profile */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* Projects Calendar & Master Work Orders Hub Button */}
+          <button
+            type="button"
+            onClick={() => setIsCalendarModalOpen(true)}
+            className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition shadow-xs flex items-center gap-1.5 text-xs font-semibold shrink-0"
+            title="Projects Calendar & Master Work Orders Hub"
+          >
+            <CalendarIcon className="w-3.5 h-3.5 text-emerald-600 dark:text-teal-400" />
+            <span className="hidden sm:inline">Calendar & Orders</span>
+          </button>
+
           {/* Push Notification Center Bell Button with live unread badge */}
           <div className="relative">
             <button
@@ -1104,6 +1253,7 @@ export const WorkspaceLayout: React.FC = () => {
             onGenerateWorkOrder={handleGenerateWorkOrder}
             onUpdateWorkOrderStatus={handleUpdateWorkOrderStatus}
             onOpenClientReviewModal={(vId) => setReviewVersionId(vId)}
+            onMarkComplete={() => setIsMarkCompleteDialogOpen(true)}
           />
         )}
 
@@ -1120,6 +1270,7 @@ export const WorkspaceLayout: React.FC = () => {
           onOpenAuditConsole={() => setIsAuditModalOpen(true)}
           onOpenEstimateDraftModal={() => handleCreateEstimateDraft(null, 'New Estimate Scope', [])}
           onOpenCorrectTimeModal={(msg) => setTimeCorrectionMessage(msg)}
+          onUpdateWorkOrderStatus={handleUpdateWorkOrderStatus}
         />
       </div>
 
@@ -1150,6 +1301,7 @@ export const WorkspaceLayout: React.FC = () => {
             onGenerateWorkOrder={handleGenerateWorkOrder}
             onUpdateWorkOrderStatus={handleUpdateWorkOrderStatus}
             onOpenClientReviewModal={(vId) => setReviewVersionId(vId)}
+            onMarkComplete={() => setIsMarkCompleteDialogOpen(true)}
             onBackToProjects={() => setMobileTab('projects')}
           />
         )}
@@ -1167,6 +1319,7 @@ export const WorkspaceLayout: React.FC = () => {
             onOpenAuditConsole={() => setIsAuditModalOpen(true)}
             onOpenEstimateDraftModal={() => handleCreateEstimateDraft(null, 'New Estimate Scope', [])}
             onOpenCorrectTimeModal={(msg) => setTimeCorrectionMessage(msg)}
+            onUpdateWorkOrderStatus={handleUpdateWorkOrderStatus}
             onBackToProjects={() => setMobileTab('projects')}
           />
         )}
@@ -1297,6 +1450,132 @@ export const WorkspaceLayout: React.FC = () => {
           onClose={() => setIsTeamModalOpen(false)}
         />
       )}
+
+      {/* Admin Confirm Project Completion Modal */}
+      {isMarkCompleteDialogOpen && activeProject && (
+        <Modal
+          isOpen={isMarkCompleteDialogOpen}
+          onClose={() => setIsMarkCompleteDialogOpen(false)}
+          title="Confirm Project Completion"
+          subtitle={`Mark "${activeProject.name}" as completed`}
+          maxWidth="md"
+        >
+          <div className="space-y-4 text-xs text-slate-700 dark:text-slate-300">
+            <p>
+              Are you sure you want to mark project <strong className="text-slate-900 dark:text-slate-100">{activeProject.name}</strong> as <strong>Completed</strong>?
+            </p>
+            <p className="text-slate-500 text-[11px] leading-relaxed">
+              This will transition the project status to Completed and create an immutable audit log entry. All historical deliverables, work orders, and chat logs remain fully accessible.
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsMarkCompleteDialogOpen(false)}
+                className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleMarkProjectComplete}
+                className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-bold text-white shadow-xs flex items-center gap-1.5"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Confirm Completion</span>
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Additional Scope Budget Confirmation Dialog */}
+      {budgetUpdateDialog && budgetUpdateDialog.isOpen && (
+        <Modal
+          isOpen={budgetUpdateDialog.isOpen}
+          onClose={() => setBudgetUpdateDialog(null)}
+          title="Update Internal Budget?"
+          subtitle={`Additional scope approved for "${budgetUpdateDialog.packageTitle}"`}
+          maxWidth="md"
+        >
+          <div className="space-y-4 text-xs text-slate-700 dark:text-slate-300">
+            <p>
+              This additional estimate adds <strong className="text-emerald-600 font-mono font-bold">+{budgetUpdateDialog.newAdditionalHours} hrs</strong> to the project scope.
+            </p>
+            <div className="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Current Budget:</span>
+                <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                  {budgetUpdateDialog.currentBudgetHours != null ? `${budgetUpdateDialog.currentBudgetHours} hrs` : 'Not set'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Additional Scope:</span>
+                <span className="font-mono font-bold text-emerald-600">
+                  +{budgetUpdateDialog.newAdditionalHours} hrs
+                </span>
+              </div>
+              <div className="flex justify-between pt-1 border-t border-slate-200 dark:border-slate-800 font-semibold">
+                <span>Suggested New Budget Total:</span>
+                <span className="font-mono font-bold text-cyan-600 dark:text-cyan-400">
+                  {budgetUpdateDialog.suggestedTotal} hrs
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Confirmed Total Budget Hours:
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={budgetUpdateDialog.confirmedHours}
+                onChange={(e) =>
+                  setBudgetUpdateDialog((prev) =>
+                    prev ? { ...prev, confirmedHours: Number(e.target.value) || 0 } : null
+                  )
+                }
+                className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setBudgetUpdateDialog(null)}
+                className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                Keep Current Budget
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const hours = budgetUpdateDialog.confirmedHours;
+                  handleUpdateFinancials({ internal_budget_hours: hours });
+                  setBudgetUpdateDialog(null);
+                }}
+                className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-bold text-white shadow-xs flex items-center gap-1.5"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Confirm New Budget</span>
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Projects Calendar & Master Work Orders Hub */}
+      <ProjectCalendarModal
+        isOpen={isCalendarModalOpen}
+        onClose={() => setIsCalendarModalOpen(false)}
+        projects={projects}
+        clients={clients}
+        workOrders={workOrders}
+        packages={packages}
+        onSelectProject={handleSelectProject}
+        onUpdateWorkOrderStatus={handleUpdateWorkOrderStatus}
+      />
 
       {/* Floating Web Push Toast Notifications Stack */}
       <PushToastContainer

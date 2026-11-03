@@ -6,6 +6,7 @@ import { Project, Client, SafeMessage, ScopeVersion } from '../../types';
 import { useAuth } from '../auth/AuthContext';
 import { RichTextEditor } from '../conversations/RichTextEditor';
 import { EstimateConversationCard } from '../conversations/EstimateConversationCard';
+import { WorkOrderConversationCard } from '../conversations/WorkOrderConversationCard';
 import { DualTimeBadge } from '../../components/DualTimeBadge';
 import { Modal } from '../../components/Modal';
 import { 
@@ -35,6 +36,7 @@ interface RightPanelConversationProps {
   onOpenAuditConsole: () => void;
   onOpenEstimateDraftModal: () => void;
   onOpenCorrectTimeModal: (message: SafeMessage) => void;
+  onUpdateWorkOrderStatus?: (woId: string, status: any) => void;
   onBackToProjects?: () => void;
 }
 
@@ -50,6 +52,7 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
   onOpenAuditConsole,
   onOpenEstimateDraftModal,
   onOpenCorrectTimeModal,
+  onUpdateWorkOrderStatus,
   onBackToProjects,
 }) => {
   const { currentUser, isSuperAdmin, isMember, canViewMoney } = useAuth();
@@ -297,6 +300,16 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
                     }
                     return null;
                   })()}
+
+                  {/* Interactive Work Order Card (Generated and Delivered to Client) */}
+                  {msg.work_order_card && (
+                    <WorkOrderConversationCard
+                      workOrder={msg.work_order_card}
+                      projectName={project?.name || 'Project'}
+                      canViewMoney={canViewMoney}
+                      onMarkComplete={onUpdateWorkOrderStatus ? (woId) => onUpdateWorkOrderStatus(woId, 'completed') : undefined}
+                    />
+                  )}
 
                   {/* Attachments */}
                   {msg.attachments && msg.attachments.length > 0 && (
