@@ -173,14 +173,14 @@ export const WorkspaceLayout: React.FC = () => {
     setProjects((prev) => [...prev, newProj]);
     setSelectedProjectId(newProj.id);
 
-    // Initialize default project financials for this newly created project
+    // Initialize project financials — no default budget hours; it will auto-set from the first estimate draft
     setFinancials((prev) => ({
       ...prev,
       [newProj.id]: {
         project_id: newProj.id,
-        internal_budget_hours: 100,
-        internal_budget_amount_usd: 5000,
-        internal_budget_amount_bdt: 600000,
+        internal_budget_hours: null,
+        internal_budget_amount_usd: null,
+        internal_budget_amount_bdt: null,
         internal_cost_rate_usd_per_hour: 25,
         internal_cost_rate_bdt_per_hour: 3000,
         client_rate_usd_per_hour: 50,
@@ -430,6 +430,37 @@ export const WorkspaceLayout: React.FC = () => {
     };
 
     setVersions((prev) => [...prev, newVersion]);
+
+    // Auto-set internal budget from the FIRST estimate ever created for this project
+    const projectHasNoEstimatesYet = !versions.some((v) =>
+      packages.some((pkg) => pkg.id === v.scope_package_id && pkg.project_id === selectedProjectId)
+    );
+    if (projectHasNoEstimatesYet && totalHours > 0) {
+      setFinancials((prev) => {
+        const existing = prev[selectedProjectId];
+        // Only auto-set if budget has not been manually configured yet
+        if (!existing || existing.internal_budget_hours === null) {
+          const usdRate = existing?.client_rate_usd_per_hour || 50;
+          const bdtRate = existing?.client_rate_bdt_per_hour || 6000;
+          return {
+            ...prev,
+            [selectedProjectId]: {
+              project_id: selectedProjectId,
+              internal_budget_hours: totalHours,
+              internal_budget_amount_usd: totalHours * usdRate,
+              internal_budget_amount_bdt: totalHours * bdtRate,
+              internal_cost_rate_usd_per_hour: existing?.internal_cost_rate_usd_per_hour ?? 25,
+              internal_cost_rate_bdt_per_hour: existing?.internal_cost_rate_bdt_per_hour ?? 3000,
+              client_rate_usd_per_hour: usdRate,
+              client_rate_bdt_per_hour: bdtRate,
+              currency_rate_mode: existing?.currency_rate_mode ?? 'independent_rates',
+              updated_at: new Date().toISOString(),
+            },
+          };
+        }
+        return prev;
+      });
+    }
 
     // Push notification for drafted estimate
     notify({

@@ -87,8 +87,12 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
     { title: 'Testing & Verification', hours: 10 },
   ]);
 
-  // Financial form state
-  const [formBudgetHours, setFormBudgetHours] = useState(financialSettings?.internal_budget_hours?.toString() || '120');
+  // Financial form state — budget hours starts empty when not yet set
+  const [formBudgetHours, setFormBudgetHours] = useState(
+    financialSettings?.internal_budget_hours != null
+      ? financialSettings.internal_budget_hours.toString()
+      : ''
+  );
   const [formRateUsd, setFormRateUsd] = useState(financialSettings?.client_rate_usd_per_hour?.toString() || '50');
   const [formRateBdt, setFormRateBdt] = useState(financialSettings?.client_rate_bdt_per_hour?.toString() || '6000');
 
@@ -129,7 +133,8 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
 
   const handleSaveFinancials = (e: React.FormEvent) => {
     e.preventDefault();
-    const hours = Number(formBudgetHours) || 0;
+    // Allow null/unset budget — only compute if a value is provided
+    const hours = formBudgetHours.trim() !== '' ? Number(formBudgetHours) : null;
     const usdRate = Number(formRateUsd) || 0;
     const bdtRate = Number(formRateBdt) || 0;
 
@@ -137,8 +142,8 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
       internal_budget_hours: hours,
       client_rate_usd_per_hour: usdRate,
       client_rate_bdt_per_hour: bdtRate,
-      internal_budget_amount_usd: hours * usdRate,
-      internal_budget_amount_bdt: hours * bdtRate,
+      internal_budget_amount_usd: hours != null ? hours * usdRate : null,
+      internal_budget_amount_bdt: hours != null ? hours * bdtRate : null,
     });
     setIsFinModalOpen(false);
   };
@@ -249,7 +254,9 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                 <span>Budget Allocation</span>
               </div>
               <div className="text-xl font-bold font-mono text-slate-800 dark:text-slate-300 mt-0.5">
-                {formatHours(financialSettings?.internal_budget_hours || 120)}
+                {financialSettings?.internal_budget_hours != null
+                  ? formatHours(financialSettings.internal_budget_hours)
+                  : <span className="text-slate-400 text-sm font-medium">Not set</span>}
               </div>
               <div className="text-[10px] text-slate-500 mt-0.5">
                 Internal scope allocation
@@ -520,13 +527,16 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
           <div>
             <label className="block text-xs font-medium text-slate-300 mb-1">
               Internal Budget Allocation (Hours)
+              <span className="ml-1 text-slate-500 font-normal">(auto-set from first estimate if left empty)</span>
             </label>
             <input
               type="number"
               step="0.01"
+              min="0"
               value={formBudgetHours}
               onChange={(e) => setFormBudgetHours(e.target.value)}
-              className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500"
+              placeholder="e.g. 80 — leave blank to auto-set from first estimate"
+              className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500 placeholder:text-slate-400 dark:placeholder:text-slate-600"
             />
           </div>
 
