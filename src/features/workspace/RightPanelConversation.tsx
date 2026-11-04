@@ -6,6 +6,7 @@ import { Project, Client, SafeMessage, ScopeVersion } from '../../types';
 import { useAuth, TeamMember } from '../auth/AuthContext';
 import { RichTextEditor } from '../conversations/RichTextEditor';
 import { FormattedMessageText, MentionCandidate } from '../conversations/MentionAutocomplete';
+import { RichMessageRenderer } from '../conversations/RichMessageRenderer';
 import { EstimateConversationCard } from '../conversations/EstimateConversationCard';
 import { WorkOrderConversationCard } from '../conversations/WorkOrderConversationCard';
 import { DualTimeBadge } from '../../components/DualTimeBadge';
@@ -307,18 +308,16 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
                     </div>
                   </div>
 
-                  {/* Render Message Content with interactive @mentions */}
+                  {/* Render Message Content with high-fidelity rich tables, lists, formatting & @mentions */}
                   <div className="text-slate-800 dark:text-slate-200 leading-relaxed space-y-1">
                     {msg.is_deleted && !isSuperAdmin ? (
                       <span className="text-slate-500 italic">[This message was deleted]</span>
                     ) : (
-                      <p className="whitespace-pre-wrap leading-relaxed">
-                        <FormattedMessageText
-                          text={extractText(msg.content_json)}
-                          currentUserName={currentUser.display_name}
-                          candidates={mentionCandidates}
-                        />
-                      </p>
+                      <RichMessageRenderer
+                        contentJson={msg.content_json}
+                        currentUserName={currentUser.display_name}
+                        candidates={mentionCandidates}
+                      />
                     )}
                   </div>
 
