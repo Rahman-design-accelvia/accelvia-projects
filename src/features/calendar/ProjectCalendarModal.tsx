@@ -9,6 +9,7 @@ import { Modal } from '../../components/Modal';
 import { Project, WorkOrder, Client, ScopePackage, UserRole } from '../../types';
 import { useAuth } from '../auth/AuthContext';
 import { formatHours, formatUSD, formatBDT } from '../../lib/formatting/currency';
+import { DocumentExportButtons } from '../../components/DocumentExportButtons';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -556,7 +557,16 @@ export const ProjectCalendarModal: React.FC<ProjectCalendarModalProps> = ({
                               {new Date(wo.generated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                             </td>
                             <td className="py-2.5 px-3 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
+                              <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                <DocumentExportButtons
+                                  type="work_order"
+                                  workOrder={wo}
+                                  projectName={proj?.name}
+                                  clientName={client?.name}
+                                  canViewMoney={canViewMoney}
+                                  size="xs"
+                                />
+
                                 {onUpdateWorkOrderStatus && wo.status === 'delivered' && (
                                   <button
                                     type="button"

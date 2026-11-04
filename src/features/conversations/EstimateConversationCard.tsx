@@ -6,6 +6,7 @@ import React, { useState } from 'react';
 import { ScopeVersion, ScopeVersionStatus } from '../../types';
 import { useAuth } from '../auth/AuthContext';
 import { StatusBadge } from '../../components/StatusBadge';
+import { DocumentExportButtons } from '../../components/DocumentExportButtons';
 import { formatHours, formatUSD, formatBDT } from '../../lib/formatting/currency';
 import { 
   FileSpreadsheet, 
@@ -180,7 +181,16 @@ export const EstimateConversationCard: React.FC<EstimateConversationCardProps> =
             )}
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+            {/* Copy Table & PDF Print Buttons */}
+            <DocumentExportButtons
+              type="estimate"
+              version={version}
+              packageTitle={packageTitle}
+              canViewMoney={canViewMoney}
+              size="xs"
+            />
+
             {/* Direct Approve Action for Admin / Super Admin */}
             {canApprove && (
               <button

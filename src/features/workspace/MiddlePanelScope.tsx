@@ -14,6 +14,7 @@ import { useAuth } from '../auth/AuthContext';
 import { StatusBadge } from '../../components/StatusBadge';
 import { DualTimeBadge } from '../../components/DualTimeBadge';
 import { Modal } from '../../components/Modal';
+import { DocumentExportButtons } from '../../components/DocumentExportButtons';
 import { formatHours, formatUSD, formatBDT, calculateScopeTotals } from '../../lib/formatting/currency';
 import { calculateProjectApprovedHours } from '../../lib/state-machines';
 import { 
@@ -456,6 +457,16 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
 
                           {/* Action Buttons */}
                           <div className="flex items-center gap-1">
+                            <DocumentExportButtons
+                              type="estimate"
+                              version={ver}
+                              packageTitle={pkg.title}
+                              projectName={project.name}
+                              clientName={client?.name}
+                              canViewMoney={canViewMoney}
+                              size="xs"
+                            />
+
                             {/* If Draft: Show Send to Client */}
                             {ver.status === 'draft' && canViewMoney && (
                               <button
@@ -547,7 +558,16 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                       isoInstant={wo.generated_at}
                       projectIanaTimezone={project.timezone}
                     />
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <DocumentExportButtons
+                        type="work_order"
+                        workOrder={wo}
+                        projectName={project.name}
+                        clientName={client?.name}
+                        canViewMoney={canViewMoney}
+                        size="xs"
+                      />
+
                       <button
                         onClick={() => setPreviewWorkOrder(wo)}
                         className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] flex items-center gap-1"

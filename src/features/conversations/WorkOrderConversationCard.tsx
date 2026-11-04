@@ -5,6 +5,7 @@
 import React, { useState } from 'react';
 import { WorkOrderStatus } from '../../types';
 import { formatHours, formatUSD, formatBDT } from '../../lib/formatting/currency';
+import { DocumentExportButtons } from '../../components/DocumentExportButtons';
 import {
   FileCheck,
   ChevronDown,
@@ -169,25 +170,36 @@ export const WorkOrderConversationCard: React.FC<WorkOrderConversationCardProps>
             </span>
           </div>
 
-          {/* Mark as Completed button for Admin (only if status is 'delivered') */}
-          {isDelivered && onMarkComplete && (
-            <button
-              type="button"
-              onClick={() => onMarkComplete(workOrder.work_order_id)}
-              className="w-full sm:w-auto justify-center px-4 py-2 sm:py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition shadow-md shadow-emerald-600/30 active:scale-95"
-              title="Mark this work order as completed"
-            >
-              <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
-              <span>Mark as Completed</span>
-            </button>
-          )}
+          {/* Action buttons & export */}
+          <div className="flex flex-wrap items-center gap-2">
+            <DocumentExportButtons
+              type="work_order"
+              workOrder={workOrder}
+              projectName={projectName}
+              canViewMoney={canViewMoney}
+              size="xs"
+            />
 
-          {isCompleted && (
-            <span className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1 text-[11px]">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Completed</span>
-            </span>
-          )}
+            {/* Mark as Completed button for Admin (only if status is 'delivered') */}
+            {isDelivered && onMarkComplete && (
+              <button
+                type="button"
+                onClick={() => onMarkComplete(workOrder.work_order_id)}
+                className="w-full sm:w-auto justify-center px-4 py-2 sm:py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition shadow-md shadow-emerald-600/30 active:scale-95"
+                title="Mark this work order as completed"
+              >
+                <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                <span>Mark as Completed</span>
+              </button>
+            )}
+
+            {isCompleted && (
+              <span className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1 text-[11px]">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Completed</span>
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>
