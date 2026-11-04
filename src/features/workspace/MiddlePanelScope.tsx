@@ -80,7 +80,7 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
   const [isNewEstimateModalOpen, setIsNewEstimateModalOpen] = useState(false);
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
   const [selectedVersionForSend, setSelectedVersionForSend] = useState<ScopeVersion | null>(null);
-  const [sendRecipientEmail, setSendRecipientEmail] = useState('robert@techspheredynamics.com');
+  const [sendRecipientEmail, setSendRecipientEmail] = useState('');
   const [shareToConversation, setShareToConversation] = useState(true);
 
   const [previewWorkOrder, setPreviewWorkOrder] = useState<WorkOrder | null>(null);
@@ -197,9 +197,10 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
   const handleSendEstimateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedVersionForSend) return;
-    onSendEstimate(selectedVersionForSend.id, sendRecipientEmail, shareToConversation);
+    onSendEstimate(selectedVersionForSend.id, sendRecipientEmail.trim(), shareToConversation);
     setIsSendModalOpen(false);
     setSelectedVersionForSend(null);
+    setSendRecipientEmail('');
   };
 
   const handleSaveFinancials = (e: React.FormEvent) => {
@@ -849,22 +850,31 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
       {/* Send Estimate Modal */}
       <Modal
         isOpen={isSendModalOpen}
-        onClose={() => setIsSendModalOpen(false)}
+        onClose={() => {
+          setIsSendModalOpen(false);
+          setSendRecipientEmail('');
+        }}
         title="Send Estimate for Client Approval"
         subtitle="Locks immutable version snapshot and issues secure review link"
       >
         <form onSubmit={handleSendEstimateSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1">
-              Client Recipient Email
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-medium text-slate-300">
+                Client Recipient Email(s)
+              </label>
+              <span className="text-[11px] text-slate-500 font-normal">Optional</span>
+            </div>
             <input
-              type="email"
-              required
+              type="text"
               value={sendRecipientEmail}
               onChange={(e) => setSendRecipientEmail(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
+              placeholder="e.g. client@company.com, manager@domain.com (or leave blank)"
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-teal-500"
             />
+            <p className="text-[11px] text-slate-500 mt-1">
+              Supports any mail platform (Gmail, Outlook, custom domain) • Separate multiple emails with commas or semicolons
+            </p>
           </div>
 
           <div className="flex items-center gap-2.5 p-3 rounded-lg bg-orange-950/40 border border-orange-500/50">
@@ -890,7 +900,10 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
-              onClick={() => setIsSendModalOpen(false)}
+              onClick={() => {
+                setIsSendModalOpen(false);
+                setSendRecipientEmail('');
+              }}
               className="px-3 py-1.5 rounded-lg border border-slate-800 text-xs text-slate-400 hover:bg-slate-800"
             >
               Cancel

@@ -520,8 +520,9 @@ export const WorkspaceLayout: React.FC = () => {
     });
   };
 
-  const handleSendEstimate = (versionId: string, email: string, postToConversation: boolean = true) => {
+  const handleSendEstimate = (versionId: string, email: string = '', postToConversation: boolean = true) => {
     let targetVer: ScopeVersion | undefined;
+    const cleanEmail = email.trim();
 
     setVersions((prev) =>
       prev.map((v) => {
@@ -541,8 +542,8 @@ export const WorkspaceLayout: React.FC = () => {
           entity_id: v.id,
           action: 'SEND_ESTIMATE_VERSION',
           before_state: { status: 'draft' },
-          after_state: { status: 'pending', recipient: email },
-          reason: 'Sent to client with expiring review token',
+          after_state: { status: 'pending', recipient: cleanEmail || 'Client Review Portal (No Email Required)' },
+          reason: cleanEmail ? `Sent to client (${cleanEmail})` : 'Estimate locked and issued to pending client review',
           server_recorded_at: new Date().toISOString(),
           source: 'ui',
         };
@@ -556,9 +557,10 @@ export const WorkspaceLayout: React.FC = () => {
     const verSnapshot = targetVer || versions.find((v) => v.id === versionId);
     const verNum = verSnapshot?.version_number || 1;
     const hrs = (verSnapshot?.total_hours_snapshot || 0).toFixed(1);
+    const destinationText = cleanEmail ? `dispatched to ${cleanEmail}` : 'issued for client approval';
     notify({
       title: `📤 Estimate Sent to Client: v${verNum}.0`,
-      body: `Estimate Scope (${hrs} hrs) dispatched to ${email}. Status updated to Pending Client Review.`,
+      body: `Estimate Scope (${hrs} hrs) ${destinationText}. Status updated to Pending Client Review.`,
       category: 'estimate_status',
       project_id: selectedProjectId,
       project_name: activeProject?.name,

@@ -37,8 +37,8 @@ export const ClientReviewModal: React.FC<ClientReviewModalProps> = ({
   project,
   onClientDecision,
 }) => {
-  const [clientName, setClientName] = useState('Robert Vance');
-  const [clientEmail, setClientEmail] = useState('robert@techspheredynamics.com');
+  const [clientName, setClientName] = useState('Client Reviewer');
+  const [clientEmail, setClientEmail] = useState('');
   const [comment, setComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [decisionRecorded, setDecisionRecorded] = useState<string | null>(null);
@@ -154,10 +154,11 @@ export const ClientReviewModal: React.FC<ClientReviewModalProps> = ({
               <div>
                 <label className="block text-[11px] text-slate-600 dark:text-slate-400 mb-1">Your Business Email</label>
                 <input
-                  type="email"
+                  type="text"
                   value={clientEmail}
                   onChange={(e) => setClientEmail(e.target.value)}
-                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500"
+                  placeholder="client@company.com (any platform)"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500 placeholder:text-slate-400 dark:placeholder:text-slate-600"
                 />
               </div>
             </div>
