@@ -64,7 +64,7 @@ import { ProjectCalendarModal } from '../calendar/ProjectCalendarModal';
 import { Calendar as CalendarIcon } from 'lucide-react';
 
 export const WorkspaceLayout: React.FC = () => {
-  const { currentRole, currentUser, isSuperAdmin, isMember, isAuthenticated, logout, pendingRegistrations } = useAuth();
+  const { currentRole, currentUser, isSuperAdmin, isMember, isAuthenticated, logout, pendingRegistrations, teamMembers } = useAuth();
   const { theme, toggleTheme, isDark } = useTheme();
   const { notify, unreadCount } = useNotifications();
 
@@ -194,7 +194,7 @@ export const WorkspaceLayout: React.FC = () => {
     setProjects((prev) => [...prev, newProj]);
     setSelectedProjectId(newProj.id);
 
-    // Initialize project financials — no default budget hours; it will auto-set from the first estimate draft
+    // Initialize project financials — no default rates and no default budget hours
     setFinancials((prev) => ({
       ...prev,
       [newProj.id]: {
@@ -202,10 +202,10 @@ export const WorkspaceLayout: React.FC = () => {
         internal_budget_hours: null,
         internal_budget_amount_usd: null,
         internal_budget_amount_bdt: null,
-        internal_cost_rate_usd_per_hour: 25,
-        internal_cost_rate_bdt_per_hour: 3000,
-        client_rate_usd_per_hour: 50,
-        client_rate_bdt_per_hour: 6000,
+        internal_cost_rate_usd_per_hour: null,
+        internal_cost_rate_bdt_per_hour: null,
+        client_rate_usd_per_hour: null,
+        client_rate_bdt_per_hour: null,
         currency_rate_mode: 'independent_rates',
         updated_at: new Date().toISOString(),
       },
@@ -287,6 +287,31 @@ export const WorkspaceLayout: React.FC = () => {
       project_name: activeProject?.name,
       author_name: currentUser.display_name,
     });
+
+    // Google L6 Standard @mention scanner: Alert targeted users when mentioned
+    const mentionedMembers = (teamMembers || []).filter((m) => {
+      if (m.user_id === currentUser.user_id) return false;
+      const pattern = new RegExp(`@${m.display_name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i');
+      return pattern.test(snippet);
+    });
+
+    const isManagementMentioned = /@Management\b/i.test(snippet) && !isSuperAdmin;
+
+    if (mentionedMembers.length > 0 || isManagementMentioned) {
+      const targetNames = [
+        ...mentionedMembers.map((m) => m.display_name),
+        ...(isManagementMentioned ? ['Management'] : []),
+      ].join(', ');
+
+      notify({
+        title: `🔔 Mention Alert: ${currentUser.display_name} mentioned ${targetNames}`,
+        body: snippet.length > 120 ? `"${snippet.slice(0, 117)}..."` : `"${snippet}"`,
+        category: 'conversation',
+        project_id: activeProject?.id,
+        project_name: activeProject?.name,
+        author_name: currentUser.display_name,
+      });
+    }
   };
 
   const handleEditMessage = (messageId: string, newText: string) => {
@@ -423,8 +448,8 @@ export const WorkspaceLayout: React.FC = () => {
     const pkgExistingVersions = versions.filter((v) => v.scope_package_id === targetPkgId);
     const verNumber = pkgExistingVersions.length + 1;
     const totalHours = items.reduce((acc, it) => acc + (Number(it.hours) || 0), 0);
-    const rateUsd = activeFinancials?.client_rate_usd_per_hour || 50;
-    const rateBdt = activeFinancials?.client_rate_bdt_per_hour || 6000;
+    const rateUsd = activeFinancials?.client_rate_usd_per_hour ?? null;
+    const rateBdt = activeFinancials?.client_rate_bdt_per_hour ?? null;
 
     const newVersion: ScopeVersion = {
       id: `ver-${Date.now()}`,
@@ -435,8 +460,8 @@ export const WorkspaceLayout: React.FC = () => {
       client_rate_usd_per_hour_snapshot: rateUsd,
       client_rate_bdt_per_hour_snapshot: rateBdt,
       total_hours_snapshot: totalHours,
-      total_usd_snapshot: totalHours * rateUsd,
-      total_bdt_snapshot: totalHours * rateBdt,
+      total_usd_snapshot: rateUsd != null ? totalHours * rateUsd : null,
+      total_bdt_snapshot: rateBdt != null ? totalHours * rateBdt : null,
       created_at: new Date().toISOString(),
       event_at: new Date().toISOString(),
       items: items.map((it, idx) => ({
@@ -461,17 +486,17 @@ export const WorkspaceLayout: React.FC = () => {
         const existing = prev[selectedProjectId];
         // Only auto-set if budget has not been manually configured yet
         if (!existing || existing.internal_budget_hours === null) {
-          const usdRate = existing?.client_rate_usd_per_hour || 50;
-          const bdtRate = existing?.client_rate_bdt_per_hour || 6000;
+          const usdRate = existing?.client_rate_usd_per_hour ?? null;
+          const bdtRate = existing?.client_rate_bdt_per_hour ?? null;
           return {
             ...prev,
             [selectedProjectId]: {
               project_id: selectedProjectId,
               internal_budget_hours: totalHours,
-              internal_budget_amount_usd: totalHours * usdRate,
-              internal_budget_amount_bdt: totalHours * bdtRate,
-              internal_cost_rate_usd_per_hour: existing?.internal_cost_rate_usd_per_hour ?? 25,
-              internal_cost_rate_bdt_per_hour: existing?.internal_cost_rate_bdt_per_hour ?? 3000,
+              internal_budget_amount_usd: usdRate != null ? totalHours * usdRate : null,
+              internal_budget_amount_bdt: bdtRate != null ? totalHours * bdtRate : null,
+              internal_cost_rate_usd_per_hour: existing?.internal_cost_rate_usd_per_hour ?? null,
+              internal_cost_rate_bdt_per_hour: existing?.internal_cost_rate_bdt_per_hour ?? null,
               client_rate_usd_per_hour: usdRate,
               client_rate_bdt_per_hour: bdtRate,
               currency_rate_mode: existing?.currency_rate_mode ?? 'independent_rates',
@@ -1263,6 +1288,7 @@ export const WorkspaceLayout: React.FC = () => {
           client={activeClient}
           messages={messages}
           versions={versions}
+          teamMembers={teamMembers}
           onSendMessage={handleSendMessage}
           onEditMessage={handleEditMessage}
           onDeleteMessage={handleDeleteMessage}
@@ -1312,6 +1338,7 @@ export const WorkspaceLayout: React.FC = () => {
             client={activeClient}
             messages={messages}
             versions={versions}
+            teamMembers={teamMembers}
             onSendMessage={handleSendMessage}
             onEditMessage={handleEditMessage}
             onDeleteMessage={handleDeleteMessage}

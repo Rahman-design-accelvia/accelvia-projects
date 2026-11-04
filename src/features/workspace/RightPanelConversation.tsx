@@ -1,10 +1,11 @@
 // src/features/workspace/RightPanelConversation.tsx
 // Right Panel: Project Primary Conversation with rich-text, attachments, dual-time, and Super Admin masking
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Project, Client, SafeMessage, ScopeVersion } from '../../types';
-import { useAuth } from '../auth/AuthContext';
+import { useAuth, TeamMember } from '../auth/AuthContext';
 import { RichTextEditor } from '../conversations/RichTextEditor';
+import { FormattedMessageText, MentionCandidate } from '../conversations/MentionAutocomplete';
 import { EstimateConversationCard } from '../conversations/EstimateConversationCard';
 import { WorkOrderConversationCard } from '../conversations/WorkOrderConversationCard';
 import { DualTimeBadge } from '../../components/DualTimeBadge';
@@ -29,6 +30,7 @@ interface RightPanelConversationProps {
   client?: Client | null;
   messages: SafeMessage[];
   versions: ScopeVersion[];
+  teamMembers?: TeamMember[];
   onSendMessage: (contentJson: Record<string, unknown>, attachments: File[]) => void;
   onEditMessage: (messageId: string, newText: string) => void;
   onDeleteMessage: (messageId: string) => void;
@@ -45,6 +47,7 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
   client,
   messages,
   versions,
+  teamMembers,
   onSendMessage,
   onEditMessage,
   onDeleteMessage,
@@ -55,7 +58,19 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
   onUpdateWorkOrderStatus,
   onBackToProjects,
 }) => {
-  const { currentUser, isSuperAdmin, isMember, canViewMoney } = useAuth();
+  const { currentUser, isSuperAdmin, isMember, canViewMoney, teamMembers: contextTeamMembers } = useAuth();
+  const activeTeamMembers = teamMembers || contextTeamMembers || [];
+
+  const mentionCandidates: MentionCandidate[] = useMemo(() => {
+    return activeTeamMembers.map((m) => ({
+      id: m.user_id,
+      display_name: m.display_name,
+      email: m.email,
+      role: m.role,
+      avatar_text: m.display_name.charAt(0).toUpperCase(),
+      is_management: m.role === 'super_admin',
+    }));
+  }, [activeTeamMembers]);
 
   // Edit message modal state
   const [editingMessage, setEditingMessage] = useState<SafeMessage | null>(null);
@@ -75,13 +90,32 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
     setEditingMessage(null);
   };
 
-  // Helper to extract text from simple tiptap json
+  // Helper to extract text from Tiptap JSON with recursive paragraph/list/table traversal
   const extractText = (json: any): string => {
     try {
-      if (!json || !json.content) return '';
-      return json.content
-        .map((p: any) => (p.content ? p.content.map((c: any) => c.text).join('') : ''))
-        .join('\n');
+      if (!json) return '';
+      if (typeof json === 'string') return json;
+      if (Array.isArray(json.content)) {
+        const lines: string[] = [];
+        const processNode = (node: any) => {
+          if (node?.type === 'paragraph' || node?.type === 'heading' || node?.type === 'listItem') {
+            const pTexts: string[] = [];
+            const collect = (child: any) => {
+              if (child?.text) pTexts.push(child.text);
+              if (Array.isArray(child?.content)) child.content.forEach(collect);
+            };
+            collect(node);
+            if (pTexts.length > 0) lines.push(pTexts.join(''));
+          } else if (node?.text) {
+            lines.push(node.text);
+          } else if (Array.isArray(node?.content)) {
+            node.content.forEach(processNode);
+          }
+        };
+        json.content.forEach(processNode);
+        if (lines.length > 0) return lines.join('\n');
+      }
+      return '';
     } catch {
       return '';
     }
@@ -273,12 +307,18 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
                     </div>
                   </div>
 
-                  {/* Render Message Content */}
-                  <div className="text-slate-200 leading-relaxed space-y-1">
+                  {/* Render Message Content with interactive @mentions */}
+                  <div className="text-slate-800 dark:text-slate-200 leading-relaxed space-y-1">
                     {msg.is_deleted && !isSuperAdmin ? (
-                      <span className="text-slate-500">[This message was deleted]</span>
+                      <span className="text-slate-500 italic">[This message was deleted]</span>
                     ) : (
-                      <p className="whitespace-pre-wrap">{extractText(msg.content_json)}</p>
+                      <p className="whitespace-pre-wrap leading-relaxed">
+                        <FormattedMessageText
+                          text={extractText(msg.content_json)}
+                          currentUserName={currentUser.display_name}
+                          candidates={mentionCandidates}
+                        />
+                      </p>
                     )}
                   </div>
 
@@ -337,7 +377,7 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
 
       {/* Message Input Composer */}
       <div className="p-2.5 sm:p-4 border-t border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/80">
-        <RichTextEditor onSendMessage={onSendMessage} />
+        <RichTextEditor onSendMessage={onSendMessage} teamMembers={activeTeamMembers} />
       </div>
 
       {/* Edit Message Modal */}

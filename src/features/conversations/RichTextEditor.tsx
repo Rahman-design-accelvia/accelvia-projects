@@ -1,7 +1,8 @@
 // src/features/conversations/RichTextEditor.tsx
-// Tiptap rich-text editor with table support, clipboard paste normalization, and upload validation
+// Tiptap rich-text editor with table support, clipboard paste normalization, upload validation,
+// and Google L6-standard accessible @mention autocomplete system.
 
-import React, { useRef } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Table from '@tiptap/extension-table';
@@ -11,6 +12,8 @@ import TableHeader from '@tiptap/extension-table-header';
 import Underline from '@tiptap/extension-underline';
 import Link from '@tiptap/extension-link';
 import { normalizePastedHtml, validateAttachment } from '../../lib/rich-text/paste-normalizer';
+import { useAuth, TeamMember } from '../auth/AuthContext';
+import { MentionPopover, MentionCandidate } from './MentionAutocomplete';
 import {
   Bold,
   Italic,
@@ -21,22 +24,146 @@ import {
   Paperclip,
   Send,
   AlertTriangle,
+  AtSign,
 } from 'lucide-react';
 
 interface RichTextEditorProps {
   onSendMessage: (contentJson: Record<string, unknown>, attachments: File[]) => void;
   placeholder?: string;
   disabled?: boolean;
+  teamMembers?: TeamMember[];
+}
+
+interface MentionState {
+  isOpen: boolean;
+  query: string;
+  range: { from: number; to: number };
+  filteredCandidates: MentionCandidate[];
 }
 
 export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   onSendMessage,
-  placeholder = 'Write a message... (Ctrl+Enter to send)',
+  placeholder = 'Write a message... Type @ to mention a team member. (Ctrl+Enter to send)',
   disabled = false,
+  teamMembers: propTeamMembers,
 }) => {
-  const [attachments, setAttachments] = React.useState<File[]>([]);
-  const [uploadError, setUploadError] = React.useState<{ error: string; recommendation?: string } | null>(null);
+  const { teamMembers: contextTeamMembers } = useAuth();
+  const availableMembers = propTeamMembers || contextTeamMembers || [];
+
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [uploadError, setUploadError] = useState<{ error: string; recommendation?: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Mention autocomplete state
+  const [mentionState, setMentionState] = useState<MentionState | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  // Mutable refs for editor event callbacks (prevents stale closures in Tiptap event handlers)
+  const mentionStateRef = useRef<MentionState | null>(null);
+  mentionStateRef.current = mentionState;
+  const selectedIndexRef = useRef(selectedIndex);
+  selectedIndexRef.current = selectedIndex;
+
+  // Transform system team members into candidate list
+  const candidates: MentionCandidate[] = useMemo(() => {
+    const list: MentionCandidate[] = availableMembers
+      .filter((m) => m.status === 'active' || !m.status)
+      .map((m) => ({
+        id: m.user_id,
+        display_name: m.display_name,
+        email: m.email,
+        role: m.role,
+        avatar_text: m.display_name.charAt(0).toUpperCase(),
+        is_management: m.role === 'super_admin',
+      }));
+
+    // Prepend @Management option for team-wide management ping
+    if (!list.some((c) => c.id === 'management')) {
+      list.unshift({
+        id: 'management',
+        display_name: 'Management',
+        email: 'management@accelvia.internal',
+        role: 'management',
+        avatar_text: 'M',
+        is_management: true,
+      });
+    }
+
+    return list;
+  }, [availableMembers]);
+
+  const candidatesRef = useRef(candidates);
+  candidatesRef.current = candidates;
+
+  // Check cursor position for @mention query trigger
+  const checkMentionTrigger = (editorInstance: any) => {
+    if (!editorInstance) return;
+    try {
+      const { state } = editorInstance;
+      const { selection } = state;
+      const { $from, from, to } = selection;
+
+      // Only evaluate if cursor is collapsed
+      if (from !== to) {
+        if (mentionStateRef.current?.isOpen) setMentionState(null);
+        return;
+      }
+
+      // Check text in current block preceding the cursor (up to 35 chars)
+      const parentOffset = $from.parentOffset;
+      const fromOffset = Math.max(0, parentOffset - 35);
+      const textBefore = $from.parent.textBetween(fromOffset, parentOffset, undefined, '\ufffc');
+
+      // Match @ followed by non-newline characters (avoid email addresses like test@foo.com)
+      const match = /(?:^|\s)@([a-zA-Z0-9_\s.()'-]{0,25})$/.exec(textBefore);
+
+      if (match) {
+        const query = match[1];
+        // Calculate starting document index of '@'
+        const matchLength = query.length + 1; // +1 for the '@' symbol
+        const startPos = from - matchLength;
+
+        const q = query.toLowerCase().trim();
+        const filtered = candidatesRef.current.filter((c) => {
+          if (!q) return true;
+          return (
+            c.display_name.toLowerCase().includes(q) ||
+            c.email.toLowerCase().includes(q) ||
+            c.role.toLowerCase().includes(q)
+          );
+        });
+
+        setSelectedIndex(0);
+        setMentionState({
+          isOpen: true,
+          query,
+          range: { from: startPos, to: from },
+          filteredCandidates: filtered,
+        });
+      } else {
+        if (mentionStateRef.current?.isOpen) {
+          setMentionState(null);
+        }
+      }
+    } catch {
+      // Graceful fallback if DOM is mid-render
+    }
+  };
+
+  const handleSelectCandidate = (candidate: MentionCandidate) => {
+    if (!editor || !mentionStateRef.current) return;
+    const { range } = mentionStateRef.current;
+    const mentionText = `@${candidate.display_name} `;
+
+    editor
+      .chain()
+      .focus()
+      .deleteRange(range)
+      .insertContent(mentionText)
+      .run();
+
+    setMentionState(null);
+  };
 
   const editor = useEditor({
     extensions: [
@@ -73,21 +200,55 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           event.preventDefault();
           // Normalize clipboard styles to match destination theme & remove dark backgrounds
           const normalized = normalizePastedHtml(html);
-          // Insert normalized HTML into Tiptap
-          const { state, dispatch } = view;
-          const parser = (view as any).someProp('domParser') || view.dom.ownerDocument.defaultView?.DOMParser;
           editor?.commands.insertContent(normalized);
           return true;
         }
         return false;
       },
       handleKeyDown: (view, event) => {
+        const currentMention = mentionStateRef.current;
+
+        // Mention autocomplete keyboard handling
+        if (currentMention && currentMention.isOpen && currentMention.filteredCandidates.length > 0) {
+          if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            setSelectedIndex((prev) => (prev + 1) % currentMention.filteredCandidates.length);
+            return true;
+          }
+          if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            setSelectedIndex(
+              (prev) => (prev - 1 + currentMention.filteredCandidates.length) % currentMention.filteredCandidates.length
+            );
+            return true;
+          }
+          if (event.key === 'Enter' || event.key === 'Tab') {
+            event.preventDefault();
+            const activeCandidate = currentMention.filteredCandidates[selectedIndexRef.current];
+            if (activeCandidate) {
+              handleSelectCandidate(activeCandidate);
+            }
+            return true;
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            setMentionState(null);
+            return true;
+          }
+        }
+
         if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
           handleSend();
           return true;
         }
         return false;
       },
+    },
+    onUpdate: ({ editor }) => {
+      checkMentionTrigger(editor);
+    },
+    onSelectionUpdate: ({ editor }) => {
+      checkMentionTrigger(editor);
     },
   });
 
@@ -101,6 +262,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     editor.commands.clearContent();
     setAttachments([]);
     setUploadError(null);
+    setMentionState(null);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -128,8 +290,24 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
   };
 
+  const handleTriggerMention = () => {
+    if (!editor) return;
+    editor.chain().focus().insertContent('@').run();
+  };
+
   return (
-    <div className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/90 rounded-xl overflow-hidden focus-within:border-emerald-500/50 dark:focus-within:border-teal-500/50 shadow-sm transition">
+    <div className="relative border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/90 rounded-xl focus-within:border-emerald-500/50 dark:focus-within:border-teal-500/50 shadow-sm transition">
+      {/* Floating Mention Autocomplete Popover */}
+      {mentionState?.isOpen && (
+        <MentionPopover
+          query={mentionState.query}
+          candidates={mentionState.filteredCandidates}
+          selectedIndex={selectedIndex}
+          onSelect={handleSelectCandidate}
+          onClose={() => setMentionState(null)}
+        />
+      )}
+
       {/* Formatting Toolbar */}
       <div className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/40 text-slate-600 dark:text-slate-400 overflow-x-auto no-scrollbar">
         <button
@@ -195,6 +373,17 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         </button>
 
         <span className="w-px h-4 bg-slate-200 dark:bg-slate-800 mx-1 shrink-0" />
+
+        {/* Mention Team Member shortcut button */}
+        <button
+          type="button"
+          onClick={handleTriggerMention}
+          className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition flex items-center gap-1 text-xs shrink-0"
+          title="Mention team member (@)"
+        >
+          <AtSign className="w-4 h-4 text-emerald-600 dark:text-teal-400" />
+          <span className="hidden sm:inline font-medium">Mention</span>
+        </button>
 
         {/* Attachment button */}
         <input
@@ -264,7 +453,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       {/* Action Footer */}
       <div className="px-3 py-2 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-950/60 flex items-center justify-between gap-2">
         <div className="hidden sm:block text-[11px] text-slate-500 truncate">
-          Paste tables, bold, and links cleanly • Theme styles automatically preserved
+          Type <span className="font-mono text-emerald-600 dark:text-teal-400 font-bold">@</span> to mention team members • Paste tables and styled text cleanly
         </div>
         <button
           type="button"

@@ -1,7 +1,7 @@
 // src/features/workspace/MiddlePanelScope.tsx
 // Middle Panel: Scope Packages, Versioned Estimates, Rates & Work Orders
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Project, 
   Client,
@@ -151,14 +151,41 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
     setNewEstimateItems([{ title: '', hours: '' }]);
   };
 
-  // Financial form state — budget hours starts empty when not yet set
+  // Financial form state — budget hours and rates start empty when not yet set (no default fake rates)
   const [formBudgetHours, setFormBudgetHours] = useState(
     financialSettings?.internal_budget_hours != null
       ? financialSettings.internal_budget_hours.toString()
       : ''
   );
-  const [formRateUsd, setFormRateUsd] = useState(financialSettings?.client_rate_usd_per_hour?.toString() || '50');
-  const [formRateBdt, setFormRateBdt] = useState(financialSettings?.client_rate_bdt_per_hour?.toString() || '6000');
+  const [formRateUsd, setFormRateUsd] = useState(
+    financialSettings?.client_rate_usd_per_hour != null
+      ? financialSettings.client_rate_usd_per_hour.toString()
+      : ''
+  );
+  const [formRateBdt, setFormRateBdt] = useState(
+    financialSettings?.client_rate_bdt_per_hour != null
+      ? financialSettings.client_rate_bdt_per_hour.toString()
+      : ''
+  );
+
+  // Synchronize form state whenever active financialSettings change
+  useEffect(() => {
+    setFormBudgetHours(
+      financialSettings?.internal_budget_hours != null
+        ? financialSettings.internal_budget_hours.toString()
+        : ''
+    );
+    setFormRateUsd(
+      financialSettings?.client_rate_usd_per_hour != null
+        ? financialSettings.client_rate_usd_per_hour.toString()
+        : ''
+    );
+    setFormRateBdt(
+      financialSettings?.client_rate_bdt_per_hour != null
+        ? financialSettings.client_rate_bdt_per_hour.toString()
+        : ''
+    );
+  }, [financialSettings]);
 
   // Calculate authoritative approved hours across packages
   const packagesWithVersions = packages.map((pkg) => ({
@@ -177,17 +204,17 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
 
   const handleSaveFinancials = (e: React.FormEvent) => {
     e.preventDefault();
-    // Allow null/unset budget — only compute if a value is provided
+    // Allow null/unset budget and rates — only compute monetary value if a rate is explicitly provided
     const hours = formBudgetHours.trim() !== '' ? Number(formBudgetHours) : null;
-    const usdRate = Number(formRateUsd) || 0;
-    const bdtRate = Number(formRateBdt) || 0;
+    const usdRate = formRateUsd.trim() !== '' ? Number(formRateUsd) : null;
+    const bdtRate = formRateBdt.trim() !== '' ? Number(formRateBdt) : null;
 
     onUpdateFinancials({
       internal_budget_hours: hours,
       client_rate_usd_per_hour: usdRate,
       client_rate_bdt_per_hour: bdtRate,
-      internal_budget_amount_usd: hours != null ? hours * usdRate : null,
-      internal_budget_amount_bdt: hours != null ? hours * bdtRate : null,
+      internal_budget_amount_usd: hours != null && usdRate != null ? hours * usdRate : null,
+      internal_budget_amount_bdt: hours != null && bdtRate != null ? hours * bdtRate : null,
     });
     setIsFinModalOpen(false);
   };
@@ -307,10 +334,14 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                 <span>Commercial Value</span>
               </div>
               <div className="text-sm font-bold font-mono text-slate-900 dark:text-slate-200 mt-1">
-                {formatUSD(totalApprovedHours * (financialSettings?.client_rate_usd_per_hour || 50))}
+                {financialSettings?.client_rate_usd_per_hour != null
+                  ? formatUSD(totalApprovedHours * financialSettings.client_rate_usd_per_hour)
+                  : <span className="text-slate-400 text-xs font-normal">Rate not set</span>}
               </div>
               <div className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
-                {formatBDT(totalApprovedHours * (financialSettings?.client_rate_bdt_per_hour || 6000))}
+                {financialSettings?.client_rate_bdt_per_hour != null
+                  ? formatBDT(totalApprovedHours * financialSettings.client_rate_bdt_per_hour)
+                  : <span className="text-slate-400">BDT not set</span>}
               </div>
             </div>
           ) : (
@@ -630,25 +661,31 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1">
                 Client Rate (USD / hr)
+                <span className="ml-1 text-slate-500 font-normal">(optional)</span>
               </label>
               <input
                 type="number"
                 step="0.01"
+                min="0"
+                placeholder="e.g. 50 — not set"
                 value={formRateUsd}
                 onChange={(e) => setFormRateUsd(e.target.value)}
-                className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500"
+                className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500 placeholder:text-slate-400 dark:placeholder:text-slate-600"
               />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1">
                 Client Rate (BDT / hr)
+                <span className="ml-1 text-slate-500 font-normal">(optional)</span>
               </label>
               <input
                 type="number"
                 step="0.01"
+                min="0"
+                placeholder="e.g. 6000 — not set"
                 value={formRateBdt}
                 onChange={(e) => setFormRateBdt(e.target.value)}
-                className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500"
+                className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500 placeholder:text-slate-400 dark:placeholder:text-slate-600"
               />
             </div>
           </div>
