@@ -1,7 +1,7 @@
 // src/features/workspace/MiddlePanelScope.tsx
 // Middle Panel: Scope Packages, Versioned Estimates, Rates & Work Orders
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Project, 
   Client,
@@ -30,7 +30,10 @@ import {
   Eye, 
   FileText,
   Building2,
-  ChevronLeft
+  ChevronLeft,
+  X,
+  Trash2,
+  AlertCircle
 } from 'lucide-react';
 
 interface MiddlePanelScopeProps {
@@ -81,13 +84,71 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
 
   const [previewWorkOrder, setPreviewWorkOrder] = useState<WorkOrder | null>(null);
 
-  // Draft estimate creator state
+  // Draft estimate creator state (starts clean with 0 preset data)
   const [newEstimateTitle, setNewEstimateTitle] = useState('');
   const [newEstimatePkgId, setNewEstimatePkgId] = useState<string>('new');
-  const [newEstimateItems, setNewEstimateItems] = useState<Array<{ title: string; hours: number }>>([
-    { title: 'Core Implementation', hours: 20 },
-    { title: 'Testing & Verification', hours: 10 },
+  const [newEstimateItems, setNewEstimateItems] = useState<Array<{ title: string; hours: number | string }>>([
+    { title: '', hours: '' },
   ]);
+  const [estimateDraftError, setEstimateDraftError] = useState<string | null>(null);
+
+  const handleOpenNewEstimateModal = () => {
+    setNewEstimateTitle('');
+    setNewEstimatePkgId('new');
+    setNewEstimateItems([{ title: '', hours: '' }]);
+    setEstimateDraftError(null);
+    setIsNewEstimateModalOpen(true);
+  };
+
+  const handleAddItemRow = () => {
+    setNewEstimateItems((prev) => [...prev, { title: '', hours: '' }]);
+  };
+
+  const handleRemoveItemRow = (index: number) => {
+    setNewEstimateItems((prev) => {
+      if (prev.length <= 1) {
+        // If it's the last row, clear it to clean slate
+        return [{ title: '', hours: '' }];
+      }
+      return prev.filter((_, idx) => idx !== index);
+    });
+  };
+
+  const handleItemChange = (index: number, field: 'title' | 'hours', value: string) => {
+    setNewEstimateItems((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
+  };
+
+  const totalDraftHours = useMemo(() => {
+    return newEstimateItems.reduce((acc, it) => acc + (Number(it.hours) || 0), 0);
+  }, [newEstimateItems]);
+
+  const handleCreateEstimateSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setEstimateDraftError(null);
+
+    // Auto-filter out empty rows so accidental blanks never block saving
+    const validItems = newEstimateItems
+      .map((it) => ({
+        title: it.title.trim(),
+        hours: Number(it.hours) || 0,
+      }))
+      .filter((it) => it.title.length > 0 && it.hours > 0);
+
+    if (validItems.length === 0) {
+      setEstimateDraftError('Please enter at least one deliverable item with a title and hours greater than 0.');
+      return;
+    }
+
+    const pkgId = newEstimatePkgId === 'new' ? null : newEstimatePkgId;
+    onCreateEstimateDraft(pkgId, newEstimateTitle.trim(), validItems);
+    setIsNewEstimateModalOpen(false);
+    setNewEstimateTitle('');
+    setNewEstimateItems([{ title: '', hours: '' }]);
+  };
 
   // Financial form state — budget hours starts empty when not yet set
   const [formBudgetHours, setFormBudgetHours] = useState(
@@ -104,26 +165,6 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
     versions: versions.filter((v) => v.scope_package_id === pkg.id),
   }));
   const totalApprovedHours = calculateProjectApprovedHours(packagesWithVersions);
-
-  const handleAddItemRow = () => {
-    setNewEstimateItems((prev) => [...prev, { title: '', hours: 0 }]);
-  };
-
-  const handleItemChange = (index: number, field: 'title' | 'hours', value: any) => {
-    setNewEstimateItems((prev) => {
-      const copy = [...prev];
-      copy[index] = { ...copy[index], [field]: field === 'hours' ? Number(value) : value };
-      return copy;
-    });
-  };
-
-  const handleCreateEstimateSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const pkgId = newEstimatePkgId === 'new' ? null : newEstimatePkgId;
-    onCreateEstimateDraft(pkgId, newEstimateTitle.trim(), newEstimateItems);
-    setIsNewEstimateModalOpen(false);
-    setNewEstimateTitle('');
-  };
 
   const handleSendEstimateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -327,7 +368,8 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                   Estimate Packages
                 </span>
                 <button
-                  onClick={() => setIsNewEstimateModalOpen(true)}
+                  type="button"
+                  onClick={handleOpenNewEstimateModal}
                   className="px-2.5 py-1 rounded-lg bg-teal-500/10 border border-teal-500/30 text-teal-300 hover:bg-teal-500/20 text-xs font-medium flex items-center gap-1 transition"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -652,40 +694,80 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
             </div>
           )}
 
+          {/* Validation Error Notice */}
+          {estimateDraftError && (
+            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{estimateDraftError}</span>
+            </div>
+          )}
+
           <div>
-            <div className="flex justify-between items-center mb-1">
-              <label className="text-xs font-medium text-slate-300">Line Items & Hours</label>
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                <span>Line Items & Hours</span>
+                <span className="text-[10px] text-slate-500 font-normal">(each row has a cross button to remove)</span>
+              </label>
               <button
                 type="button"
                 onClick={handleAddItemRow}
-                className="text-xs text-teal-400 hover:underline flex items-center gap-1"
+                className="text-xs text-teal-400 hover:text-teal-300 hover:underline flex items-center gap-1 font-semibold"
               >
-                + Add Item
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Add Item</span>
               </button>
             </div>
 
-            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
               {newEstimateItems.map((item, idx) => (
-                <div key={idx} className="flex gap-2 items-center">
+                <div key={idx} className="flex gap-2 items-center group">
                   <input
                     type="text"
-                    required
-                    placeholder="Task or deliverable name"
+                    placeholder={`Deliverable #${idx + 1} (e.g. Core API architecture)`}
                     value={item.title}
                     onChange={(e) => handleItemChange(idx, 'title', e.target.value)}
-                    className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-teal-500"
+                    className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-teal-500"
                   />
-                  <input
-                    type="number"
-                    step="0.5"
-                    required
-                    placeholder="Hours"
-                    value={item.hours}
-                    onChange={(e) => handleItemChange(idx, 'hours', e.target.value)}
-                    className="w-24 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100 font-mono focus:outline-none focus:border-teal-500"
-                  />
+                  <div className="relative w-28 shrink-0">
+                    <input
+                      type="number"
+                      step="0.25"
+                      min="0"
+                      placeholder="Hours"
+                      value={item.hours}
+                      onChange={(e) => handleItemChange(idx, 'hours', e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-3 pr-7 py-2 text-xs text-slate-100 font-mono placeholder:text-slate-600 focus:outline-none focus:border-teal-500"
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-mono pointer-events-none">
+                      hrs
+                    </span>
+                  </div>
+
+                  {/* Cross button to delete this item row */}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveItemRow(idx)}
+                    className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 border border-transparent hover:border-rose-900/60 transition shrink-0"
+                    title="Remove this line item"
+                    aria-label="Remove item"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
               ))}
+            </div>
+
+            {/* Total Estimated Hours summary */}
+            <div className="flex items-center justify-between pt-2 px-1 text-xs text-slate-400 font-mono border-t border-slate-800/60 mt-2">
+              <span>
+                {newEstimateItems.filter((it) => String(it.title).trim().length > 0).length} valid item{newEstimateItems.filter((it) => String(it.title).trim().length > 0).length !== 1 ? 's' : ''}
+              </span>
+              <span>
+                Total Scope:{' '}
+                <strong className="text-teal-400 font-bold text-sm">
+                  {formatHours(totalDraftHours)}
+                </strong>
+              </span>
             </div>
           </div>
 
