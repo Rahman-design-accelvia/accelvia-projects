@@ -113,6 +113,15 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
   const [previewWorkOrder, setPreviewWorkOrder] = useState<WorkOrder | null>(null);
   const [selectedVersionForWorkOrder, setSelectedVersionForWorkOrder] = useState<ScopeVersion | null>(null);
 
+  // Check if either USD rate or BDT rate is configured (> 0)
+  const hasRateSet = useMemo(() => {
+    const usd = financialSettings?.client_rate_usd_per_hour;
+    const bdt = financialSettings?.client_rate_bdt_per_hour;
+    const hasUsd = usd != null && !isNaN(Number(usd)) && Number(usd) > 0;
+    const hasBdt = bdt != null && !isNaN(Number(bdt)) && Number(bdt) > 0;
+    return Boolean(hasUsd || hasBdt);
+  }, [financialSettings?.client_rate_usd_per_hour, financialSettings?.client_rate_bdt_per_hour]);
+
   // Draft estimate creator state (starts clean with 0 preset data)
   const [newEstimateTitle, setNewEstimateTitle] = useState('');
   const [newEstimatePkgId, setNewEstimatePkgId] = useState<string>('new');
@@ -328,12 +337,39 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
 
             {canViewMoney && (
               <button
+                type="button"
                 onClick={() => setIsFinModalOpen(true)}
-                className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 dark:border-transparent dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 transition flex items-center gap-1 text-xs"
-                title="Project Financial Rates & Budgets (Confidential)"
+                data-testid="rates-button"
+                className={`p-1.5 rounded-lg transition flex items-center gap-1.5 text-xs font-semibold cursor-pointer ${
+                  !hasRateSet
+                    ? 'animate-rates-blink bg-amber-500/15 border border-amber-500/80 text-amber-700 dark:text-amber-300 shadow-sm shadow-amber-500/20'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 dark:border-transparent dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300'
+                }`}
+                title={
+                  !hasRateSet
+                    ? 'Rates Not Configured: Click to set either USD or BDT rate'
+                    : 'Project Financial Rates & Budgets (Configured)'
+                }
               >
-                <Sliders className="w-3.5 h-3.5 text-emerald-600 dark:text-teal-400" />
+                {!hasRateSet && (
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                  </span>
+                )}
+                <Sliders
+                  className={`w-3.5 h-3.5 shrink-0 ${
+                    !hasRateSet
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-emerald-600 dark:text-teal-400'
+                  }`}
+                />
                 <span>Rates</span>
+                {!hasRateSet && (
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 hidden sm:inline">
+                    (Set)
+                  </span>
+                )}
               </button>
             )}
           </div>
