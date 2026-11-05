@@ -25,6 +25,7 @@ import {
   FileText
 } from 'lucide-react';
 import { UserRole } from '../../types';
+import { useOrganization } from '../organization/OrganizationContext';
 
 export const LoginView: React.FC = () => {
   const { 
@@ -36,6 +37,7 @@ export const LoginView: React.FC = () => {
     loginWithGoogleGmail 
   } = useAuth();
   const { toggleTheme, isDark } = useTheme();
+  const { companyName } = useOrganization();
 
   // Mode: if no Super Admin, default to register; else signin
   const [activeTab, setActiveTab] = useState<'signin' | 'register'>(
@@ -185,12 +187,17 @@ export const LoginView: React.FC = () => {
       {/* Top Header */}
       <header className="h-14 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-8 flex items-center justify-between bg-white/80 dark:bg-slate-950/80 backdrop-blur-md">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-emerald-600 dark:bg-teal-500 flex items-center justify-center font-bold text-white dark:text-slate-950 shadow-md shadow-emerald-600/20 text-sm">
-            A
+          <div className="w-8 h-8 rounded-lg bg-emerald-600 dark:bg-teal-500 flex items-center justify-center font-bold text-white dark:text-slate-950 shadow-md shadow-emerald-600/20 text-sm uppercase">
+            {companyName ? companyName.charAt(0) : 'A'}
           </div>
-          <span className="font-bold tracking-tight text-sm text-slate-900 dark:text-slate-100">
-            ACCELVIA <span className="text-emerald-600 dark:text-teal-400 font-mono text-xs">WMS</span>
-          </span>
+          <div className="flex flex-col">
+            <span className="font-bold tracking-tight text-sm text-slate-900 dark:text-slate-100 leading-none">
+              {companyName}
+            </span>
+            <span className="text-[9px] text-slate-400 dark:text-slate-500 font-mono tracking-wider mt-0.5">
+              ACCELVIA WMS
+            </span>
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
@@ -713,7 +720,7 @@ export const LoginView: React.FC = () => {
 
       {/* Footer */}
       <footer className="py-3 px-4 text-center text-[11px] text-slate-400 dark:text-slate-500 border-t border-slate-200 dark:border-slate-900">
-        Accelvia Work Management System &bull; Enterprise Client Delivery Platform
+        {companyName} &bull; Powered by Accelvia Work Management System
       </footer>
     </div>
   );

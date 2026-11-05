@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { ThemeProvider } from './features/theme/ThemeContext';
 import { AuthProvider } from './features/auth/AuthContext';
 import { NotificationProvider } from './features/notifications/NotificationContext';
+import { OrganizationProvider } from './features/organization/OrganizationContext';
 import { WorkspaceLayout } from './features/workspace/WorkspaceLayout';
 
 const container = document.getElementById('root');
@@ -17,7 +18,9 @@ root.render(
     <ThemeProvider>
       <AuthProvider>
         <NotificationProvider>
-          <WorkspaceLayout />
+          <OrganizationProvider>
+            <WorkspaceLayout />
+          </OrganizationProvider>
         </NotificationProvider>
       </AuthProvider>
     </ThemeProvider>

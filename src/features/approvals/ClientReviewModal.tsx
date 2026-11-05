@@ -7,6 +7,7 @@ import { Modal } from '../../components/Modal';
 import { StatusBadge } from '../../components/StatusBadge';
 import { formatHours, formatUSD } from '../../lib/formatting/currency';
 import { DualTimeBadge } from '../../components/DualTimeBadge';
+import { useOrganization } from '../organization/OrganizationContext';
 import { 
   CheckCircle2, 
   XCircle, 
@@ -37,6 +38,7 @@ export const ClientReviewModal: React.FC<ClientReviewModalProps> = ({
   project,
   onClientDecision,
 }) => {
+  const { companyName } = useOrganization();
   const [clientName, setClientName] = useState('Client Reviewer');
   const [clientEmail, setClientEmail] = useState('');
   const [comment, setComment] = useState('');
@@ -58,8 +60,8 @@ export const ClientReviewModal: React.FC<ClientReviewModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Client Estimate Review Portal (Secure Review Link)"
-      subtitle="Standalone interface served to client via cryptographic token"
+      title={`${companyName} Client Estimate Review Portal`}
+      subtitle={`Secure client approval interface for ${project.name}`}
       maxWidth="2xl"
     >
       <div className="space-y-4 text-xs">
@@ -67,7 +69,7 @@ export const ClientReviewModal: React.FC<ClientReviewModalProps> = ({
         <div className="flex items-center gap-2 bg-emerald-50 dark:bg-slate-950 p-2.5 rounded-lg border border-emerald-200 dark:border-slate-800 text-emerald-800 dark:text-teal-300">
           <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-teal-400 shrink-0" />
           <span>
-            <strong>Isolated Client View:</strong> Internal conversations, internal costs, and employee rosters are withheld by database security policies.
+            <strong>{companyName} Client Portal:</strong> Internal conversations, internal costs, and employee rosters are withheld by database security policies.
           </span>
         </div>
 

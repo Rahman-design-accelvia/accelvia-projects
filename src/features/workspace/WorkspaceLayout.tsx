@@ -63,16 +63,20 @@ import { TeamManagementModal } from '../auth/TeamManagementModal';
 import { Modal } from '../../components/Modal';
 import { ProjectCalendarModal } from '../calendar/ProjectCalendarModal';
 import { Calendar as CalendarIcon } from 'lucide-react';
+import { useOrganization } from '../organization/OrganizationContext';
+import { CompanySettingsModal } from '../organization/CompanySettingsModal';
 
 export const WorkspaceLayout: React.FC = () => {
-  const { currentRole, currentUser, isSuperAdmin, isMember, isAuthenticated, logout, pendingRegistrations, teamMembers, canViewMoney } = useAuth();
+  const { currentRole, currentUser, isSuperAdmin, isAdmin, isMember, isAuthenticated, logout, pendingRegistrations, teamMembers, canViewMoney } = useAuth();
   const { theme, toggleTheme, isDark } = useTheme();
   const { notify, unreadCount } = useNotifications();
+  const { companyName } = useOrganization();
 
   // Navigation & dropdown states
   const [isNotificationMenuOpen, setIsNotificationMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+  const [isCompanySettingsModalOpen, setIsCompanySettingsModalOpen] = useState(false);
 
   // Primary state stores
   const [clients, setClients] = useState<Client[]>(SEED_CLIENTS);
@@ -1056,14 +1060,33 @@ export const WorkspaceLayout: React.FC = () => {
             )}
           </button>
 
-          {/* Brand Logo */}
+          {/* Brand Logo & Global Company Setup */}
           <div className="flex items-center gap-2 shrink-0">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-600 dark:bg-teal-500 flex items-center justify-center font-bold text-white dark:text-slate-950 shadow-md shadow-emerald-600/20 dark:shadow-teal-950 text-xs sm:text-sm">
-              A
-            </div>
-            <span className="hidden sm:inline font-bold tracking-tight text-xs sm:text-sm text-slate-900 dark:text-slate-100">
-              ACCELVIA <span className="text-emerald-600 dark:text-teal-400 font-mono text-[10px] sm:text-xs">WMS</span>
-            </span>
+            <button
+              type="button"
+              onClick={() => (isAdmin || isSuperAdmin) && setIsCompanySettingsModalOpen(true)}
+              className={`flex items-center gap-2 group text-left ${
+                isAdmin || isSuperAdmin ? 'cursor-pointer hover:opacity-90' : 'cursor-default'
+              }`}
+              title={isAdmin || isSuperAdmin ? "Company & Branding Settings (Click to configure)" : companyName}
+            >
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-600 dark:bg-teal-500 flex items-center justify-center font-bold text-white dark:text-slate-950 shadow-md shadow-emerald-600/20 dark:shadow-teal-950 text-xs sm:text-sm uppercase transition group-hover:scale-105">
+                {companyName ? companyName.charAt(0) : 'A'}
+              </div>
+              <div className="hidden sm:flex flex-col">
+                <span className="font-bold tracking-tight text-xs sm:text-sm text-slate-900 dark:text-slate-100 flex items-center gap-1 leading-none">
+                  <span className="truncate max-w-[120px] md:max-w-[180px]">{companyName}</span>
+                  {(isAdmin || isSuperAdmin) && (
+                    <span className="text-[10px] text-slate-400 group-hover:text-emerald-500 transition opacity-0 group-hover:opacity-100">
+                      ⚙️
+                    </span>
+                  )}
+                </span>
+                <span className="text-[9px] text-slate-400 dark:text-slate-500 font-mono tracking-wider mt-0.5">
+                  ACCELVIA WMS
+                </span>
+              </div>
+            </button>
           </div>
 
           <span className="h-4 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block shrink-0" />
@@ -1244,6 +1267,26 @@ export const WorkspaceLayout: React.FC = () => {
                         {pendingRegistrations.length}
                       </span>
                     )}
+                  </button>
+                )}
+
+                {/* Admin & Super Admin Company Setup */}
+                {(isSuperAdmin || isAdmin) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      setIsCompanySettingsModalOpen(true);
+                    }}
+                    className="w-full text-left py-1.5 px-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-semibold flex items-center justify-between transition cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-3.5 h-3.5 text-emerald-600 dark:text-teal-400" />
+                      <span>Company & Branding Setup</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-mono truncate max-w-[80px]">
+                      {companyName}
+                    </span>
                   </button>
                 )}
 
@@ -1642,6 +1685,12 @@ export const WorkspaceLayout: React.FC = () => {
         packages={packages}
         onSelectProject={handleSelectProject}
         onUpdateWorkOrderStatus={handleUpdateWorkOrderStatus}
+      />
+
+      {/* Global Company Name & Branding Setup Modal */}
+      <CompanySettingsModal
+        isOpen={isCompanySettingsModalOpen}
+        onClose={() => setIsCompanySettingsModalOpen(false)}
       />
 
       {/* Floating Web Push Toast Notifications Stack */}

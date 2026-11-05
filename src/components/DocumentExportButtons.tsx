@@ -14,6 +14,7 @@ import {
   buildWorkOrderPDFHtml
 } from '../lib/export/documentExporter';
 import { ScopeVersion, WorkOrder } from '../types';
+import { useOrganization } from '../features/organization/OrganizationContext';
 
 interface EstimateExportProps {
   type: 'estimate';
@@ -38,6 +39,7 @@ type DocumentExportButtonsProps = EstimateExportProps | WorkOrderExportProps;
 
 export const DocumentExportButtons: React.FC<DocumentExportButtonsProps> = (props) => {
   const [copied, setCopied] = useState(false);
+  const { companyName } = useOrganization();
   const size = props.size || 'xs';
 
   const handleCopy = async (e: React.MouseEvent) => {
@@ -51,6 +53,7 @@ export const DocumentExportButtons: React.FC<DocumentExportButtonsProps> = (prop
         projectName: props.projectName,
         clientName: props.clientName,
         canViewMoney: props.canViewMoney,
+        companyName,
       });
     } else {
       textPayload = generateWorkOrderText({
@@ -58,6 +61,7 @@ export const DocumentExportButtons: React.FC<DocumentExportButtonsProps> = (prop
         projectName: props.projectName,
         clientName: props.clientName,
         canViewMoney: props.canViewMoney,
+        companyName,
       });
     }
 
@@ -78,6 +82,7 @@ export const DocumentExportButtons: React.FC<DocumentExportButtonsProps> = (prop
         projectName: props.projectName,
         clientName: props.clientName,
         canViewMoney: props.canViewMoney,
+        companyName,
       });
       printDocumentPDF(`Estimate_${props.packageTitle || 'Scope'}_v${props.version.version_number}.pdf`, html);
     } else {
@@ -86,6 +91,7 @@ export const DocumentExportButtons: React.FC<DocumentExportButtonsProps> = (prop
         projectName: props.projectName,
         clientName: props.clientName,
         canViewMoney: props.canViewMoney,
+        companyName,
       });
       printDocumentPDF(`WorkOrder_${props.workOrder.work_order_number}.pdf`, html);
     }

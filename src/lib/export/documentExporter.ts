@@ -5,6 +5,7 @@
 
 import { ScopeVersion, WorkOrder } from '../../types';
 import { formatHours, formatUSD, formatBDT } from '../formatting/currency';
+import { getStoredCompanySettings } from '../../features/organization/OrganizationContext';
 
 interface ExportEstimateOptions {
   version: ScopeVersion | {
@@ -23,6 +24,7 @@ interface ExportEstimateOptions {
   projectName?: string;
   clientName?: string;
   canViewMoney?: boolean;
+  companyName?: string;
 }
 
 interface ExportWorkOrderOptions {
@@ -41,6 +43,7 @@ interface ExportWorkOrderOptions {
   projectName?: string;
   clientName?: string;
   canViewMoney?: boolean;
+  companyName?: string;
 }
 
 /**
@@ -48,6 +51,7 @@ interface ExportWorkOrderOptions {
  */
 export function generateEstimateText(opts: ExportEstimateOptions): { text: string; html: string; tsv: string } {
   const { version, packageTitle = 'Scope Package', projectName = 'Project', clientName = 'Client', canViewMoney = false } = opts;
+  const company = (opts.companyName || getStoredCompanySettings().companyName || 'Company').trim();
   const verNum = version.version_number;
   const totalHrs = ('total_hours_snapshot' in version ? version.total_hours_snapshot : (version as any).total_hours) || 0;
   const totalUsd = 'total_usd_snapshot' in version ? version.total_usd_snapshot : (version as any).total_usd;
@@ -56,7 +60,7 @@ export function generateEstimateText(opts: ExportEstimateOptions): { text: strin
 
   // Plain Text Layout
   let text = `============================================================\n`;
-  text += `ACCELVIA WMS — ESTIMATE SCOPE v${verNum}.0\n`;
+  text += `${company.toUpperCase()} — ESTIMATE SCOPE v${verNum}.0\n`;
   text += `Package:  ${packageTitle}\n`;
   text += `Project:  ${projectName}\n`;
   text += `Client:   ${clientName}\n`;
@@ -116,6 +120,7 @@ export function generateEstimateText(opts: ExportEstimateOptions): { text: strin
  */
 export function generateWorkOrderText(opts: ExportWorkOrderOptions): { text: string; html: string; tsv: string } {
   const { workOrder, projectName = 'Project', clientName = 'Client', canViewMoney = false } = opts;
+  const company = (opts.companyName || getStoredCompanySettings().companyName || 'Company').trim();
   const woNum = workOrder.work_order_number;
   const pkgTitle = ('package_title' in workOrder ? workOrder.package_title : 'Work Order Scope') || 'Work Order Scope';
   const hours = workOrder.hours_snapshot || 0;
@@ -127,7 +132,7 @@ export function generateWorkOrderText(opts: ExportWorkOrderOptions): { text: str
 
   // Plain text
   let text = `============================================================\n`;
-  text += `ACCELVIA WMS — AUTHORIZED WORK ORDER\n`;
+  text += `${company.toUpperCase()} — AUTHORIZED WORK ORDER\n`;
   text += `Work Order:  ${woNum}\n`;
   text += `Package:     ${pkgTitle}\n`;
   text += `Project:     ${projectName}\n`;
@@ -432,6 +437,9 @@ export function printDocumentPDF(title: string, htmlContent: string) {
  */
 export function buildEstimatePDFHtml(opts: ExportEstimateOptions): string {
   const { version, packageTitle = 'Scope Package', projectName = 'Project', clientName = 'Client', canViewMoney = false } = opts;
+  const company = (opts.companyName || getStoredCompanySettings().companyName || 'Company').trim();
+  const orgSettings = getStoredCompanySettings();
+  const tagline = orgSettings.tagline || 'Enterprise Client Delivery Platform';
   const verNum = version.version_number;
   const totalHrs = ('total_hours_snapshot' in version ? version.total_hours_snapshot : (version as any).total_hours) || 0;
   const totalUsd = 'total_usd_snapshot' in version ? version.total_usd_snapshot : (version as any).total_usd;
@@ -442,9 +450,9 @@ export function buildEstimatePDFHtml(opts: ExportEstimateOptions): string {
   return `
     <div class="header">
       <div class="brand">
-        ACCELVIA <span>WMS</span>
+        ${company.toUpperCase()}
         <div style="font-size: 11px; color: #64748b; font-weight: normal; margin-top: 2px;">
-          Enterprise Client Delivery Platform
+          ${tagline} &bull; Powered by Accelvia WMS
         </div>
       </div>
       <div class="doc-type">
@@ -522,7 +530,7 @@ export function buildEstimatePDFHtml(opts: ExportEstimateOptions): string {
     </div>
 
     <div class="footer">
-      Generated automatically by Accelvia Work Management System &bull; Confidential Client Specification
+      Generated automatically by ${company} via Accelvia Work Management System &bull; Confidential Client Specification
     </div>
   `;
 }
@@ -532,6 +540,9 @@ export function buildEstimatePDFHtml(opts: ExportEstimateOptions): string {
  */
 export function buildWorkOrderPDFHtml(opts: ExportWorkOrderOptions): string {
   const { workOrder, projectName = 'Project', clientName = 'Client', canViewMoney = false } = opts;
+  const company = (opts.companyName || getStoredCompanySettings().companyName || 'Company').trim();
+  const orgSettings = getStoredCompanySettings();
+  const tagline = orgSettings.tagline || 'Enterprise Client Delivery Platform';
   const woNum = workOrder.work_order_number;
   const pkgTitle = ('package_title' in workOrder ? workOrder.package_title : 'Work Order Scope') || 'Work Order Scope';
   const hours = workOrder.hours_snapshot || 0;
@@ -544,9 +555,9 @@ export function buildWorkOrderPDFHtml(opts: ExportWorkOrderOptions): string {
   return `
     <div class="header">
       <div class="brand">
-        ACCELVIA <span>WMS</span>
+        ${company.toUpperCase()}
         <div style="font-size: 11px; color: #64748b; font-weight: normal; margin-top: 2px;">
-          Enterprise Client Delivery Platform
+          ${tagline} &bull; Powered by Accelvia WMS
         </div>
       </div>
       <div class="doc-type">
@@ -624,7 +635,7 @@ export function buildWorkOrderPDFHtml(opts: ExportWorkOrderOptions): string {
     </div>
 
     <div class="footer">
-      Official Delivery Document &bull; Generated by Accelvia Work Management System
+      Official Delivery Document &bull; Generated by ${company} via Accelvia Work Management System
     </div>
   `;
 }

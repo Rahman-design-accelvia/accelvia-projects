@@ -5,6 +5,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { AppNotification, ToastNotification, NotificationCategory } from '../../types';
 import { WebPushService } from '../../lib/notifications/push-service';
 import { notificationAudio } from '../../lib/notifications/sound';
+import { getStoredCompanySettings } from '../organization/OrganizationContext';
 
 interface NotificationContextType {
   notifications: AppNotification[];
@@ -140,10 +141,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return notifications.filter((n) => !n.read).length;
   }, [notifications]);
 
-  // Update document title with unread badge counter e.g. "(2) Accelvia — WMS"
+  // Update document title with unread badge counter e.g. "(2) Rahman Design — WMS"
   useEffect(() => {
     if (typeof document === 'undefined') return;
-    const baseTitle = 'Accelvia — Work Management System';
+    const company = getStoredCompanySettings().companyName || 'Workspace';
+    const baseTitle = `${company} — Work Management System`;
     if (unreadCount > 0) {
       document.title = `(${unreadCount}) ${baseTitle}`;
     } else {
