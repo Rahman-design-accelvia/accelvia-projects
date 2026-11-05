@@ -2,12 +2,13 @@
 // Right Panel: Project Primary Conversation with rich-text, attachments, dual-time, and Super Admin masking
 
 import React, { useState, useMemo } from 'react';
-import { Project, Client, SafeMessage, ScopeVersion } from '../../types';
+import { Project, Client, SafeMessage, ScopeVersion, VoiceNoteData } from '../../types';
 import { useAuth, TeamMember } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
 import { RichTextEditor } from '../conversations/RichTextEditor';
 import { FormattedMessageText, MentionCandidate } from '../conversations/MentionAutocomplete';
 import { RichMessageRenderer } from '../conversations/RichMessageRenderer';
+import { VoiceNotePlayer } from '../conversations/VoiceNotePlayer';
 import { EstimateConversationCard } from '../conversations/EstimateConversationCard';
 import { WorkOrderConversationCard } from '../conversations/WorkOrderConversationCard';
 import { DualTimeBadge } from '../../components/DualTimeBadge';
@@ -33,7 +34,7 @@ interface RightPanelConversationProps {
   messages: SafeMessage[];
   versions: ScopeVersion[];
   teamMembers?: TeamMember[];
-  onSendMessage: (contentJson: Record<string, unknown>, attachments: File[]) => void;
+  onSendMessage: (contentJson: Record<string, unknown>, attachments: File[], voiceNote?: VoiceNoteData | null) => void;
   onEditMessage: (messageId: string, newText: string) => void;
   onDeleteMessage: (messageId: string) => void;
   onApproveEstimate: (versionId: string) => void;
@@ -338,6 +339,13 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
                       />
                     )}
                   </div>
+
+                  {/* Voice Note Player (Audio recording playback with scrubbable waveform & transcript) */}
+                  {msg.voice_note && !msg.is_deleted && (
+                    <div className="pt-1">
+                      <VoiceNotePlayer voiceNote={msg.voice_note} />
+                    </div>
+                  )}
 
                   {/* Interactive Estimate Scope Card (Orange tab when pending; Green border when approved) */}
                   {(() => {

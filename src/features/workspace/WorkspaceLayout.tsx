@@ -19,7 +19,8 @@ import {
   WorkOrder, 
   SafeMessage, 
   AuditEvent,
-  ProjectFinancialSettings
+  ProjectFinancialSettings,
+  VoiceNoteData
 } from '../../types';
 import {
   SEED_CLIENTS,
@@ -260,7 +261,11 @@ export const WorkspaceLayout: React.FC = () => {
     return 'New message in conversation thread';
   };
 
-  const handleSendMessage = (contentJson: Record<string, unknown>, attachments: File[]) => {
+  const handleSendMessage = (
+    contentJson: Record<string, unknown>,
+    attachments: File[],
+    voiceNote?: VoiceNoteData | null
+  ) => {
     const newMsg: SafeMessage = {
       id: `msg-${Date.now()}`,
       conversation_id: 'conv-1',
@@ -273,6 +278,7 @@ export const WorkspaceLayout: React.FC = () => {
       updated_at: new Date().toISOString(),
       is_edited: false,
       is_deleted: false,
+      voice_note: voiceNote || null,
       attachments: attachments.map((f, i) => ({
         id: `att-${Date.now()}-${i}`,
         message_id: `msg-${Date.now()}`,
@@ -287,7 +293,11 @@ export const WorkspaceLayout: React.FC = () => {
     setMessages((prev) => [...prev, newMsg]);
 
     // Dispatch real-time web push notification for conversation message
-    const snippet = extractMessageSnippet(contentJson);
+    const rawSnippet = extractMessageSnippet(contentJson);
+    let snippet = rawSnippet;
+    if ((!snippet || snippet === 'New message in conversation thread') && voiceNote) {
+      snippet = `🎙️ Voice Note (${Math.round(voiceNote.duration_seconds)}s)${voiceNote.transcript ? ': "' + voiceNote.transcript + '"' : ''}`;
+    }
     notify({
       title: `💬 New Message (${currentUser.display_name})`,
       body: snippet.length > 120 ? `${snippet.slice(0, 117)}...` : snippet,

@@ -181,6 +181,14 @@ export interface SafeMessage {
     generated_at: string;
     items?: Array<{ title: string; hours: number }>;
   } | null;
+  voice_note?: VoiceNoteData | null;
+}
+
+export interface VoiceNoteData {
+  audio_url: string;
+  duration_seconds: number;
+  transcript?: string;
+  mime_type?: string;
 }
 
 export interface ScopePackage {
