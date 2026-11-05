@@ -15,6 +15,7 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { DualTimeBadge } from '../../components/DualTimeBadge';
 import { Modal } from '../../components/Modal';
 import { DocumentExportButtons } from '../../components/DocumentExportButtons';
+import { GenerateWorkOrderModal } from '../work-orders/GenerateWorkOrderModal';
 import { formatHours, formatUSD, formatBDT, calculateScopeTotals } from '../../lib/formatting/currency';
 import { calculateProjectApprovedHours } from '../../lib/state-machines';
 import { 
@@ -47,7 +48,7 @@ interface MiddlePanelScopeProps {
   onUpdateFinancials: (settings: Partial<ProjectFinancialSettings>) => void;
   onCreateEstimateDraft: (pkgId: string | null, title: string, items: Array<{ title: string; hours: number }>) => void;
   onSendEstimate: (versionId: string, email: string, postToConversation: boolean) => void;
-  onGenerateWorkOrder: (versionId: string, kind: 'detailed' | 'summary') => void;
+  onGenerateWorkOrder: (versionId: string, kind: 'detailed' | 'summary', includeBdt?: boolean) => void;
   onUpdateWorkOrderStatus: (woId: string, status: any) => void;
   onOpenClientReviewModal: (versionId: string) => void;
   onMarkComplete?: () => void;
@@ -84,6 +85,7 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
   const [shareToConversation, setShareToConversation] = useState(true);
 
   const [previewWorkOrder, setPreviewWorkOrder] = useState<WorkOrder | null>(null);
+  const [selectedVersionForWorkOrder, setSelectedVersionForWorkOrder] = useState<ScopeVersion | null>(null);
 
   // Draft estimate creator state (starts clean with 0 preset data)
   const [newEstimateTitle, setNewEstimateTitle] = useState('');
@@ -528,7 +530,7 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                             {/* If Approved: Generate Work Order */}
                             {ver.status === 'approved' && canViewMoney && (
                               <button
-                                onClick={() => onGenerateWorkOrder(ver.id, 'detailed')}
+                                onClick={() => setSelectedVersionForWorkOrder(ver)}
                                 className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 text-[11px] font-medium flex items-center gap-1 transition"
                               >
                                 <FileCheck className="w-3 h-3" />
@@ -580,6 +582,15 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                         <div className="font-mono text-teal-300 font-bold">
                           {formatUSD(wo.total_usd_snapshot)}
                         </div>
+                        {wo.total_bdt_snapshot != null ? (
+                          <div className="text-[10px] font-mono text-slate-400">
+                            {formatBDT(wo.total_bdt_snapshot)}
+                          </div>
+                        ) : (
+                          <div className="text-[10px] font-sans text-slate-500">
+                            USD Only
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -918,6 +929,19 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
         </form>
       </Modal>
 
+      {/* Generate Work Order Modal (With BDT or Without BDT configuration) */}
+      <GenerateWorkOrderModal
+        isOpen={Boolean(selectedVersionForWorkOrder)}
+        onClose={() => setSelectedVersionForWorkOrder(null)}
+        version={selectedVersionForWorkOrder}
+        packageItem={packages.find((p) => p.id === selectedVersionForWorkOrder?.scope_package_id)}
+        projectName={project.name}
+        canViewMoney={canViewMoney}
+        onConfirm={(vId, kind, includeBdt) => {
+          onGenerateWorkOrder(vId, kind, includeBdt);
+        }}
+      />
+
       {/* Work Order Preview Modal */}
       <Modal
         isOpen={Boolean(previewWorkOrder)}
@@ -950,7 +974,12 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                       <span className="text-slate-500">USD Value:</span> {formatUSD(previewWorkOrder.total_usd_snapshot)}
                     </div>
                     <div>
-                      <span className="text-slate-500">BDT Value:</span> {formatBDT(previewWorkOrder.total_bdt_snapshot)}
+                      <span className="text-slate-500">BDT Value:</span>{' '}
+                      {previewWorkOrder.total_bdt_snapshot != null ? (
+                        formatBDT(previewWorkOrder.total_bdt_snapshot)
+                      ) : (
+                        <span className="text-slate-500 font-sans italic">Not included (USD only)</span>
+                      )}
                     </div>
                   </>
                 )}

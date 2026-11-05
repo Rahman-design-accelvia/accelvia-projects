@@ -10,6 +10,7 @@ import { RightPanelConversation } from './RightPanelConversation';
 import { AuditConsoleModal } from '../audit/AuditConsoleModal';
 import { ClientReviewModal } from '../approvals/ClientReviewModal';
 import { CorrectEventTimeModal } from '../audit/CorrectEventTimeModal';
+import { GenerateWorkOrderModal } from '../work-orders/GenerateWorkOrderModal';
 import { 
   Client, 
   Project, 
@@ -64,7 +65,7 @@ import { ProjectCalendarModal } from '../calendar/ProjectCalendarModal';
 import { Calendar as CalendarIcon } from 'lucide-react';
 
 export const WorkspaceLayout: React.FC = () => {
-  const { currentRole, currentUser, isSuperAdmin, isMember, isAuthenticated, logout, pendingRegistrations, teamMembers } = useAuth();
+  const { currentRole, currentUser, isSuperAdmin, isMember, isAuthenticated, logout, pendingRegistrations, teamMembers, canViewMoney } = useAuth();
   const { theme, toggleTheme, isDark } = useTheme();
   const { notify, unreadCount } = useNotifications();
 
@@ -95,6 +96,7 @@ export const WorkspaceLayout: React.FC = () => {
 
   // Feature 4: Project Calendar & Master Work Orders Hub
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
+  const [workOrderModalVersion, setWorkOrderModalVersion] = useState<ScopeVersion | null>(null);
 
   // Feature 3: Additional estimate budget confirmation dialog state
   const [budgetUpdateDialog, setBudgetUpdateDialog] = useState<{
@@ -777,12 +779,17 @@ export const WorkspaceLayout: React.FC = () => {
     );
   };
 
-  const handleGenerateWorkOrder = (versionId: string, kind: 'detailed' | 'summary') => {
+  const handleGenerateWorkOrder = (
+    versionId: string,
+    kind: 'detailed' | 'summary' = 'detailed',
+    includeBdt: boolean = true
+  ) => {
     const ver = versions.find((v) => v.id === versionId);
     if (!ver || ver.status !== 'approved') return;
 
     const seq = workOrders.length + 1;
     const woNum = `WO-20261030-${String(seq).padStart(4, '0')}`;
+    const finalBdt = includeBdt ? (ver.total_bdt_snapshot ?? null) : null;
 
     const newWo: WorkOrder = {
       id: `wo-${Date.now()}`,
@@ -795,7 +802,7 @@ export const WorkspaceLayout: React.FC = () => {
       status: 'approved',
       hours_snapshot: ver.total_hours_snapshot,
       total_usd_snapshot: ver.total_usd_snapshot,
-      total_bdt_snapshot: ver.total_bdt_snapshot,
+      total_bdt_snapshot: finalBdt,
       generated_at: new Date().toISOString(),
       approved_at_snapshot: ver.approved_at || new Date().toISOString(),
       created_at: new Date().toISOString(),
@@ -813,8 +820,15 @@ export const WorkspaceLayout: React.FC = () => {
       entity_id: newWo.id,
       action: 'GENERATE_WORK_ORDER',
       before_state: null,
-      after_state: { number: woNum, hours: ver.total_hours_snapshot },
-      reason: 'Official document generated from approved scope version',
+      after_state: {
+        number: woNum,
+        hours: ver.total_hours_snapshot,
+        include_bdt: includeBdt,
+        currency_mode: includeBdt ? 'USD + BDT' : 'USD only',
+      },
+      reason: includeBdt
+        ? 'Official document generated with dual currency (USD + BDT)'
+        : 'Official document generated with USD only (BDT omitted)',
       server_recorded_at: new Date().toISOString(),
       source: 'ui',
     };
@@ -822,13 +836,13 @@ export const WorkspaceLayout: React.FC = () => {
 
     notify({
       title: `📄 Work Order Created: ${woNum}`,
-      body: `Generated for ${ver.total_hours_snapshot} hrs from approved estimate scope v${ver.version_number}.0.`,
+      body: `Generated for ${ver.total_hours_snapshot} hrs (${includeBdt ? 'USD + BDT' : 'USD only'}) from approved scope.`,
       category: 'estimate_status',
       project_id: selectedProjectId,
       project_name: activeProject?.name,
     });
 
-    // Post a work_order_card message to the conversation thread (Feature 2)
+    // Post a work_order_card message to the conversation thread
     const pkg = packages.find((p) => p.id === ver.scope_package_id);
     const totalHoursFormatted = ver.total_hours_snapshot;
     const woConversationMsg: SafeMessage = {
@@ -845,7 +859,7 @@ export const WorkspaceLayout: React.FC = () => {
             content: [
               {
                 type: 'text',
-                text: `📄 Work Order ${woNum} has been generated and is ready for delivery. Total: ${totalHoursFormatted}h`,
+                text: `📄 Work Order ${woNum} generated (${includeBdt ? 'USD + BDT' : 'USD only'}). Total: ${totalHoursFormatted}h`,
               },
             ],
           },
@@ -863,7 +877,7 @@ export const WorkspaceLayout: React.FC = () => {
         package_title: pkg?.title || 'Scope Package',
         hours_snapshot: ver.total_hours_snapshot,
         total_usd_snapshot: ver.total_usd_snapshot,
-        total_bdt_snapshot: ver.total_bdt_snapshot,
+        total_bdt_snapshot: finalBdt,
         status: newWo.status,
         authorized_by: currentUser.display_name,
         generated_at: newWo.generated_at,
@@ -1295,6 +1309,10 @@ export const WorkspaceLayout: React.FC = () => {
           onEditMessage={handleEditMessage}
           onDeleteMessage={handleDeleteMessage}
           onApproveEstimate={handleApproveEstimateFromConversation}
+          onGenerateWorkOrder={(vId) => {
+            const v = versions.find((item) => item.id === vId);
+            if (v) setWorkOrderModalVersion(v);
+          }}
           onOpenAuditConsole={() => setIsAuditModalOpen(true)}
           onOpenEstimateDraftModal={() => handleCreateEstimateDraft(null, 'New Estimate Scope', [])}
           onOpenCorrectTimeModal={(msg) => setTimeCorrectionMessage(msg)}
@@ -1345,6 +1363,10 @@ export const WorkspaceLayout: React.FC = () => {
             onEditMessage={handleEditMessage}
             onDeleteMessage={handleDeleteMessage}
             onApproveEstimate={handleApproveEstimateFromConversation}
+            onGenerateWorkOrder={(vId) => {
+              const v = versions.find((item) => item.id === vId);
+              if (v) setWorkOrderModalVersion(v);
+            }}
             onOpenAuditConsole={() => setIsAuditModalOpen(true)}
             onOpenEstimateDraftModal={() => handleCreateEstimateDraft(null, 'New Estimate Scope', [])}
             onOpenCorrectTimeModal={(msg) => setTimeCorrectionMessage(msg)}
@@ -1458,6 +1480,22 @@ export const WorkspaceLayout: React.FC = () => {
           version={reviewVersion}
           project={activeProject}
           onClientDecision={handleClientDecision}
+        />
+      )}
+
+      {/* Generate Work Order Modal (Option to create with BDT or without BDT) */}
+      {workOrderModalVersion && activeProject && (
+        <GenerateWorkOrderModal
+          isOpen={Boolean(workOrderModalVersion)}
+          onClose={() => setWorkOrderModalVersion(null)}
+          version={workOrderModalVersion}
+          packageItem={packages.find((p) => p.id === workOrderModalVersion.scope_package_id)}
+          projectName={activeProject.name}
+          canViewMoney={canViewMoney}
+          onConfirm={(vId, kind, includeBdt) => {
+            handleGenerateWorkOrder(vId, kind, includeBdt);
+            setWorkOrderModalVersion(null);
+          }}
         />
       )}
 

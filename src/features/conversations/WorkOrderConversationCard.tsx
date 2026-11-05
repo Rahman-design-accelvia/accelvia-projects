@@ -123,9 +123,15 @@ export const WorkOrderConversationCard: React.FC<WorkOrderConversationCardProps>
               <span className="text-slate-900 dark:text-slate-100 font-bold text-xs">
                 {formatUSD(workOrder.total_usd_snapshot)}
               </span>
-              <span className="text-slate-500 dark:text-slate-400 text-[11px]">
-                {formatBDT(workOrder.total_bdt_snapshot)}
-              </span>
+              {workOrder.total_bdt_snapshot != null ? (
+                <span className="text-slate-500 dark:text-slate-400 text-[11px]">
+                  {formatBDT(workOrder.total_bdt_snapshot)}
+                </span>
+              ) : (
+                <span className="text-slate-400 dark:text-slate-500 text-[10px] font-sans">
+                  (USD Only)
+                </span>
+              )}
             </div>
           </div>
         )}

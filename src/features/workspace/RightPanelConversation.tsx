@@ -36,6 +36,7 @@ interface RightPanelConversationProps {
   onEditMessage: (messageId: string, newText: string) => void;
   onDeleteMessage: (messageId: string) => void;
   onApproveEstimate: (versionId: string) => void;
+  onGenerateWorkOrder?: (versionId: string) => void;
   onOpenAuditConsole: () => void;
   onOpenEstimateDraftModal: () => void;
   onOpenCorrectTimeModal: (message: SafeMessage) => void;
@@ -53,6 +54,7 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
   onEditMessage,
   onDeleteMessage,
   onApproveEstimate,
+  onGenerateWorkOrder,
   onOpenAuditConsole,
   onOpenEstimateDraftModal,
   onOpenCorrectTimeModal,
@@ -334,6 +336,7 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
                           version={cardData as ScopeVersion}
                           packageTitle={msg.estimate_card?.package_title || 'Core Project Scope'}
                           onApprove={onApproveEstimate}
+                          onGenerateWorkOrder={onGenerateWorkOrder}
                         />
                       );
                     }

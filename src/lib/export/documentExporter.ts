@@ -152,7 +152,11 @@ export function generateWorkOrderText(opts: ExportWorkOrderOptions): { text: str
 
   text += `TOTAL AUTHORIZED HOURS:                       ${hours.toFixed(1)}h\n`;
   if (canViewMoney && totalUsd != null) {
-    text += `TOTAL CONTRACT VALUE:                         ${formatUSD(totalUsd)} (${formatBDT(totalBdt || 0)})\n`;
+    if (totalBdt != null) {
+      text += `TOTAL CONTRACT VALUE:                         ${formatUSD(totalUsd)} (${formatBDT(totalBdt)})\n`;
+    } else {
+      text += `TOTAL CONTRACT VALUE:                         ${formatUSD(totalUsd)} (USD Only)\n`;
+    }
   }
   text += `============================================================\n`;
 
@@ -166,6 +170,9 @@ export function generateWorkOrderText(opts: ExportWorkOrderOptions): { text: str
   tsv += `Total Hours\t${hours}\n`;
   if (canViewMoney && totalUsd != null) {
     tsv += `Total Value USD\t${totalUsd}\n`;
+    if (totalBdt != null) {
+      tsv += `Total Value BDT\t${totalBdt}\n`;
+    }
   }
 
   // Rich HTML
@@ -187,7 +194,7 @@ export function generateWorkOrderText(opts: ExportWorkOrderOptions): { text: str
   html += `<div style="margin-top: 12px; padding: 12px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px;">`;
   html += `<div style="display: flex; justify-content: space-between; font-weight: bold;"><span>Total Authorized Hours:</span><span style="font-family: monospace; color: #2563eb;">${hours.toFixed(1)}h</span></div>`;
   if (canViewMoney && totalUsd != null) {
-    html += `<div style="display: flex; justify-content: space-between; font-weight: bold; margin-top: 4px;"><span>Total Value:</span><span style="font-family: monospace;">${formatUSD(totalUsd)}</span></div>`;
+    html += `<div style="display: flex; justify-content: space-between; font-weight: bold; margin-top: 4px;"><span>Total Value:</span><span style="font-family: monospace;">${formatUSD(totalUsd)}${totalBdt != null ? ` <span style="font-size: 11px; color: #64748b; font-weight: normal;">(${formatBDT(totalBdt)})</span>` : ' <span style="font-size: 11px; color: #64748b; font-weight: normal;">(USD Only)</span>'}</span></div>`;
   }
   html += `</div></div>`;
 
@@ -596,12 +603,14 @@ export function buildWorkOrderPDFHtml(opts: ExportWorkOrderOptions): string {
       ${canViewMoney && totalUsd != null ? `
         <div class="totals-row" style="margin-top: 6px; font-weight: 700;">
           <span>Contract Value:</span>
-          <span style="font-family: monospace;">${formatUSD(totalUsd)}</span>
+          <span style="font-family: monospace;">${formatUSD(totalUsd)}${totalBdt == null ? ' (USD Only)' : ''}</span>
         </div>
+        ${totalBdt != null ? `
         <div class="totals-row" style="font-size: 11px; color: #64748b;">
           <span>Local Currency:</span>
-          <span style="font-family: monospace;">${formatBDT(totalBdt || 0)}</span>
+          <span style="font-family: monospace;">${formatBDT(totalBdt)}</span>
         </div>
+        ` : ''}
       ` : ''}
     </div>
 
