@@ -51,7 +51,8 @@ import {
   UserPlus,
   LogOut,
   Users,
-  CheckCircle2
+  CheckCircle2,
+  Palette
 } from 'lucide-react';
 import { Sun, Moon } from '../../components/ThemeIcons';
 import { BellIcon, BellRingIcon } from '../../components/NotificationIcons';
@@ -65,10 +66,11 @@ import { ProjectCalendarModal } from '../calendar/ProjectCalendarModal';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { useOrganization } from '../organization/OrganizationContext';
 import { CompanySettingsModal } from '../organization/CompanySettingsModal';
+import { ThemeCustomizerModal } from '../theme/ThemeCustomizerModal';
 
 export const WorkspaceLayout: React.FC = () => {
   const { currentRole, currentUser, isSuperAdmin, isAdmin, isMember, isAuthenticated, logout, pendingRegistrations, teamMembers, canViewMoney } = useAuth();
-  const { theme, toggleTheme, isDark } = useTheme();
+  const { theme, toggleTheme, isDark, preset, accentColor } = useTheme();
   const { notify, unreadCount } = useNotifications();
   const { companyName } = useOrganization();
 
@@ -77,6 +79,7 @@ export const WorkspaceLayout: React.FC = () => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
   const [isCompanySettingsModalOpen, setIsCompanySettingsModalOpen] = useState(false);
+  const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
 
   // Primary state stores
   const [clients, setClients] = useState<Client[]>(SEED_CLIENTS);
@@ -1332,9 +1335,9 @@ export const WorkspaceLayout: React.FC = () => {
   }
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden text-slate-900 dark:text-slate-100 transition-colors">
+    <div className="h-screen w-screen flex flex-col theme-surface-canvas overflow-hidden text-slate-900 dark:text-slate-100 transition-colors">
       {/* Top Application Bar */}
-      <header className="h-14 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-3 sm:px-4 z-20 shrink-0 shadow-xs">
+      <header className="h-14 theme-surface-header border-b flex items-center justify-between px-3 sm:px-4 z-20 shrink-0 shadow-xs">
         {/* Brand & Left Navigation Controls */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           {/* Mobile Navigation Drawer Toggle */}
@@ -1372,7 +1375,10 @@ export const WorkspaceLayout: React.FC = () => {
               }`}
               title={isAdmin || isSuperAdmin ? "Company & Branding Settings (Click to configure)" : companyName}
             >
-              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-600 dark:bg-teal-500 flex items-center justify-center font-bold text-white dark:text-slate-950 shadow-md shadow-emerald-600/20 dark:shadow-teal-950 text-xs sm:text-sm uppercase transition group-hover:scale-105">
+              <div 
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center font-bold text-white shadow-md text-xs sm:text-sm uppercase transition group-hover:scale-105"
+                style={{ backgroundColor: accentColor }}
+              >
                 {companyName ? companyName.charAt(0) : 'A'}
               </div>
               <div className="hidden sm:flex flex-col">
@@ -1492,8 +1498,8 @@ export const WorkspaceLayout: React.FC = () => {
           <button
             type="button"
             onClick={toggleTheme}
-            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition shadow-xs flex items-center justify-center"
-            title={isDark ? "Switch to Light Theme (White & Emerald Green)" : "Switch to Dark Theme (Dark Slate & Green)"}
+            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition shadow-xs flex items-center justify-center cursor-pointer"
+            title={isDark ? "Switch to Light Theme" : "Switch to Dark Theme"}
             aria-label="Toggle theme"
           >
             {isDark ? (
@@ -1502,6 +1508,22 @@ export const WorkspaceLayout: React.FC = () => {
               <Moon className="w-4 h-4 text-emerald-600 hover:-rotate-12 transition-transform" />
             )}
           </button>
+
+          {/* Admin & Super Admin Theme & Palette Customizer */}
+          {(isAdmin || isSuperAdmin) && (
+            <button
+              type="button"
+              onClick={() => setIsThemeModalOpen(true)}
+              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition shadow-xs flex items-center justify-center group cursor-pointer"
+              title="Theme & Appearance Studio (Slack & Discord Themes)"
+              aria-label="Customize Theme & Palette"
+            >
+              <Palette
+                className="w-4 h-4 transition-transform group-hover:rotate-12"
+                style={{ color: accentColor }}
+              />
+            </button>
+          )}
 
 
 
@@ -1588,6 +1610,26 @@ export const WorkspaceLayout: React.FC = () => {
                     </div>
                     <span className="text-[10px] text-slate-400 font-mono truncate max-w-[80px]">
                       {companyName}
+                    </span>
+                  </button>
+                )}
+
+                {/* Admin & Super Admin Theme & Appearance Studio */}
+                {(isSuperAdmin || isAdmin) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      setIsThemeModalOpen(true);
+                    }}
+                    className="w-full text-left py-1.5 px-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-semibold flex items-center justify-between transition cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Palette className="w-3.5 h-3.5" style={{ color: accentColor }} />
+                      <span>Theme & Appearance</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-mono capitalize truncate max-w-[80px]">
+                      {preset.replace('-', ' ')}
                     </span>
                   </button>
                 )}
@@ -2001,6 +2043,12 @@ export const WorkspaceLayout: React.FC = () => {
       <CompanySettingsModal
         isOpen={isCompanySettingsModalOpen}
         onClose={() => setIsCompanySettingsModalOpen(false)}
+      />
+
+      {/* Admin Theme & Appearance Studio Modal (Slack & Discord Themes) */}
+      <ThemeCustomizerModal
+        isOpen={isThemeModalOpen}
+        onClose={() => setIsThemeModalOpen(false)}
       />
 
       {/* Floating Web Push Toast Notifications Stack */}

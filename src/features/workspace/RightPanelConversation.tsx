@@ -4,6 +4,7 @@
 import React, { useState, useMemo } from 'react';
 import { Project, Client, SafeMessage, ScopeVersion } from '../../types';
 import { useAuth, TeamMember } from '../auth/AuthContext';
+import { useTheme } from '../theme/ThemeContext';
 import { RichTextEditor } from '../conversations/RichTextEditor';
 import { FormattedMessageText, MentionCandidate } from '../conversations/MentionAutocomplete';
 import { RichMessageRenderer } from '../conversations/RichMessageRenderer';
@@ -62,6 +63,7 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
   onBackToProjects,
 }) => {
   const { currentUser, isSuperAdmin, isMember, canViewMoney, teamMembers: contextTeamMembers } = useAuth();
+  const { accentColor } = useTheme();
   const activeTeamMembers = teamMembers || contextTeamMembers || [];
 
   const mentionCandidates: MentionCandidate[] = useMemo(() => {
@@ -137,9 +139,9 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
   }
 
   return (
-    <div className="w-full lg:flex-1 h-full flex flex-col bg-slate-100/60 dark:bg-slate-950 overflow-hidden min-w-0 text-slate-900 dark:text-slate-100">
+    <div className="w-full lg:flex-1 h-full flex flex-col theme-surface-canvas overflow-hidden min-w-0 text-slate-900 dark:text-slate-100">
       {/* Conversation Top Header */}
-      <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-950/80 flex items-center justify-between gap-2 shadow-xs">
+      <div className="px-3 sm:px-6 py-3 sm:py-4 border-b theme-border theme-surface-header flex items-center justify-between gap-2 shadow-xs">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           {onBackToProjects && (
             <button
@@ -150,13 +152,27 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
               <ChevronLeft className="w-4 h-4" />
             </button>
           )}
-          <div className="p-1.5 sm:p-2 rounded-xl bg-emerald-50 dark:bg-teal-500/10 border border-emerald-200 dark:border-teal-500/20 text-emerald-600 dark:text-teal-400 shrink-0">
+          <div 
+            className="p-1.5 sm:p-2 rounded-xl border shrink-0 transition-colors"
+            style={{
+              backgroundColor: 'var(--theme-accent-subtle)',
+              color: accentColor,
+              borderColor: 'var(--theme-accent-subtle-border)',
+            }}
+          >
             <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h2 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 truncate">Project Conversation</h2>
-              <span className="hidden sm:inline-block text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-teal-950/80 dark:text-teal-300 dark:border-teal-800/60 shrink-0">
+              <span 
+                className="hidden sm:inline-block text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full border shrink-0"
+                style={{
+                  backgroundColor: 'var(--theme-accent-subtle)',
+                  color: accentColor,
+                  borderColor: 'var(--theme-accent-subtle-border)',
+                }}
+              >
                 Primary Thread
               </span>
             </div>

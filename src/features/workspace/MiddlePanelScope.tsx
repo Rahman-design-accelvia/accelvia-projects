@@ -11,6 +11,7 @@ import {
   ProjectFinancialSettings 
 } from '../../types';
 import { useAuth } from '../auth/AuthContext';
+import { useTheme } from '../theme/ThemeContext';
 import { StatusBadge } from '../../components/StatusBadge';
 import { DualTimeBadge } from '../../components/DualTimeBadge';
 import { Modal } from '../../components/Modal';
@@ -90,6 +91,7 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
   onBackToProjects,
 }) => {
   const { canViewMoney, isSuperAdmin, isMember } = useAuth();
+  const { accentColor } = useTheme();
 
   // Active tab: 'scope' or 'work-orders'
   const [activeTab, setActiveTab] = useState<'scope' | 'work-orders'>('scope');
@@ -259,9 +261,9 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
   }
 
   return (
-    <div className="w-full lg:w-[350px] xl:w-[400px] 2xl:w-[460px] h-full flex flex-col bg-slate-50/70 dark:bg-slate-900/60 lg:border-r border-slate-200 dark:border-slate-800/80 shrink-0 min-w-0 text-slate-900 dark:text-slate-100">
+    <div className="w-full lg:w-[350px] xl:w-[400px] 2xl:w-[460px] h-full flex flex-col theme-surface-panel lg:border-r theme-border shrink-0 min-w-0 text-slate-900 dark:text-slate-100">
       {/* Project Overview Header */}
-      <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-950/60">
+      <div className="p-3 sm:p-4 border-b theme-border theme-surface-header">
         {onBackToProjects && (
           <button
             onClick={onBackToProjects}
@@ -390,14 +392,15 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex gap-2 mt-3 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex gap-2 mt-3 border-b theme-border">
           <button
             onClick={() => setActiveTab('scope')}
             className={`pb-2 px-1 text-xs font-semibold flex items-center gap-1.5 transition ${
               activeTab === 'scope'
-                ? 'border-b-2 border-emerald-600 text-emerald-800 dark:border-teal-400 dark:text-teal-300 font-bold'
+                ? 'border-b-2 font-bold'
                 : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
+            style={activeTab === 'scope' ? { borderBottomColor: accentColor, color: accentColor } : undefined}
           >
             <Layers className="w-3.5 h-3.5" />
             <span>Scope Packages & Versions ({versions.length})</span>
@@ -406,9 +409,10 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
             onClick={() => setActiveTab('work-orders')}
             className={`pb-2 px-1 text-xs font-semibold flex items-center gap-1.5 transition ${
               activeTab === 'work-orders'
-                ? 'border-b-2 border-emerald-600 text-emerald-800 dark:border-teal-400 dark:text-teal-300 font-bold'
+                ? 'border-b-2 font-bold'
                 : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
+            style={activeTab === 'work-orders' ? { borderBottomColor: accentColor, color: accentColor } : undefined}
           >
             <FileCheck className="w-3.5 h-3.5" />
             <span>Work Orders ({workOrders.length})</span>
@@ -429,7 +433,12 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                 <button
                   type="button"
                   onClick={handleOpenNewEstimateModal}
-                  className="px-2.5 py-1 rounded-lg bg-teal-500/10 border border-teal-500/30 text-teal-300 hover:bg-teal-500/20 text-xs font-medium flex items-center gap-1 transition"
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1 transition shadow-xs cursor-pointer"
+                  style={{
+                    backgroundColor: 'var(--theme-accent-subtle)',
+                    color: accentColor,
+                    border: '1px solid var(--theme-accent-subtle-border)',
+                  }}
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Create Estimate</span>

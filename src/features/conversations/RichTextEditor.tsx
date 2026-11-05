@@ -13,6 +13,7 @@ import Underline from '@tiptap/extension-underline';
 import Link from '@tiptap/extension-link';
 import { normalizePastedHtml, validateAttachment } from '../../lib/rich-text/paste-normalizer';
 import { useAuth, TeamMember } from '../auth/AuthContext';
+import { useTheme } from '../theme/ThemeContext';
 import { MentionPopover, MentionCandidate } from './MentionAutocomplete';
 import {
   Bold,
@@ -48,6 +49,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   teamMembers: propTeamMembers,
 }) => {
   const { teamMembers: contextTeamMembers } = useAuth();
+  const { accentColor } = useTheme();
   const availableMembers = propTeamMembers || contextTeamMembers || [];
 
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -459,7 +461,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           type="button"
           onClick={handleSend}
           disabled={disabled}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 dark:bg-teal-500 dark:hover:bg-teal-400 text-white dark:text-slate-950 font-semibold px-4 py-2 sm:py-1.5 rounded-lg text-xs transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-emerald-600/20 dark:shadow-teal-950 active:scale-95 shrink-0"
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 text-white font-semibold px-4 py-2 sm:py-1.5 rounded-lg text-xs transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md active:scale-95 shrink-0 cursor-pointer"
+          style={{ backgroundColor: accentColor }}
         >
           <Send className="w-3.5 h-3.5" />
           <span>Send Message</span>

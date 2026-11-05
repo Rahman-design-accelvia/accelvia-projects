@@ -56,12 +56,12 @@ export const Modal: React.FC<ModalProps> = ({
 
       {/* Dialog box with bottom-sheet look on mobile */}
       <div
-        className={`relative w-full ${maxWidthClasses} bg-white dark:bg-slate-900 border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-2xl sm:rounded-xl shadow-2xl shadow-slate-900/20 dark:shadow-black/90 overflow-hidden z-10 max-h-[94vh] sm:max-h-[90vh] flex flex-col pb-safe text-slate-900 dark:text-slate-100`}
+        className={`relative w-full ${maxWidthClasses} theme-surface-card bg-white dark:bg-slate-900 border-t sm:border theme-border border-slate-200 dark:border-slate-800 rounded-t-2xl sm:rounded-xl shadow-2xl shadow-slate-900/20 dark:shadow-black/90 overflow-hidden z-10 max-h-[94vh] sm:max-h-[90vh] flex flex-col pb-safe text-slate-900 dark:text-slate-100`}
         role="dialog"
         aria-modal="true"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80 shrink-0">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b theme-border border-slate-200 dark:border-slate-800 theme-surface-header bg-slate-50 dark:bg-slate-900/80 shrink-0">
           <div className="pr-2 min-w-0">
             <h3 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100 truncate">{title}</h3>
             {subtitle && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">{subtitle}</p>}

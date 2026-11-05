@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { Client, Project } from '../../types';
 import { useAuth } from '../auth/AuthContext';
+import { useTheme } from '../theme/ThemeContext';
 import { StatusBadge } from '../../components/StatusBadge';
 import { Modal } from '../../components/Modal';
 import { 
@@ -39,6 +40,7 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
   onCloseMobileDrawer,
 }) => {
   const { canViewMoney, isMember } = useAuth();
+  const { accentColor } = useTheme();
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedClients, setExpandedClients] = useState<Record<string, boolean>>({
     'client-1': true,
@@ -146,9 +148,9 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
   };
 
   return (
-    <div className="w-full lg:w-60 xl:w-64 2xl:w-80 h-full flex flex-col bg-white dark:bg-slate-950 lg:border-r border-slate-200 dark:border-slate-800/80 select-none shrink-0 min-w-0 text-slate-900 dark:text-slate-100">
+    <div className="w-full lg:w-60 xl:w-64 2xl:w-80 h-full flex flex-col theme-surface-sidebar lg:border-r theme-border select-none shrink-0 min-w-0 text-slate-900 dark:text-slate-100">
       {/* Top Header */}
-      <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-slate-800/80 flex items-center justify-between bg-slate-50/80 dark:bg-slate-950/80">
+      <div className="p-3 sm:p-4 border-b theme-border flex items-center justify-between bg-slate-50/80 dark:bg-slate-950/80">
         <div>
           <div className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
             Clients & Projects
@@ -170,7 +172,12 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
               </button>
               <button
                 onClick={() => setIsProjectModalOpen(true)}
-                className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 dark:border-transparent dark:bg-teal-500/10 dark:text-teal-400 dark:hover:bg-teal-500/20 transition flex items-center gap-1 text-xs px-2 font-medium"
+                className="p-1.5 rounded-lg transition flex items-center gap-1 text-xs px-2 font-medium"
+                style={{
+                  backgroundColor: 'var(--theme-accent-subtle)',
+                  color: accentColor,
+                  border: '1px solid var(--theme-accent-subtle-border)',
+                }}
                 title="Create New Project"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -282,15 +289,25 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
                           }}
                           className={`flex items-center justify-between px-2.5 py-2 rounded-lg cursor-pointer text-xs transition ${
                             isSelected
-                              ? 'bg-emerald-50 dark:bg-teal-500/15 border border-emerald-300 dark:border-teal-500/30 text-emerald-900 dark:text-teal-200 font-semibold shadow-xs'
+                              ? 'font-semibold shadow-xs'
                               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900/60'
                           }`}
+                          style={
+                            isSelected
+                              ? {
+                                  backgroundColor: 'var(--theme-accent-subtle)',
+                                  borderColor: 'var(--theme-accent-subtle-border)',
+                                  borderWidth: 1,
+                                  borderStyle: 'solid',
+                                  color: accentColor,
+                                }
+                              : undefined
+                          }
                         >
                           <div className="flex items-center gap-2 truncate">
                             <FolderKanban
-                              className={`w-3.5 h-3.5 shrink-0 ${
-                                isSelected ? 'text-emerald-600 dark:text-teal-400' : 'text-slate-400 dark:text-slate-500'
-                              }`}
+                              className="w-3.5 h-3.5 shrink-0"
+                              style={{ color: isSelected ? accentColor : undefined }}
                             />
                             <span className="truncate">{proj.name}</span>
                           </div>
