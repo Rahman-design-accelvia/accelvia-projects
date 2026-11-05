@@ -786,7 +786,8 @@ export const WorkspaceLayout: React.FC = () => {
   const handleGenerateWorkOrder = (
     versionId: string,
     kind: 'detailed' | 'summary' = 'detailed',
-    includeBdt: boolean = true
+    includeBdt: boolean = true,
+    customItems?: Array<{ title: string; hours: number }>
   ) => {
     const ver = versions.find((v) => v.id === versionId);
     if (!ver || ver.status !== 'approved') return;
@@ -794,6 +795,39 @@ export const WorkspaceLayout: React.FC = () => {
     const seq = workOrders.length + 1;
     const woNum = `WO-20261030-${String(seq).padStart(4, '0')}`;
     const finalBdt = includeBdt ? (ver.total_bdt_snapshot ?? null) : null;
+
+    // Resolve at least 3 items for detailed breakdown
+    let woItems: Array<{ id?: string; title: string; hours: number }> = [];
+    if (kind === 'detailed') {
+      if (customItems && customItems.length >= 3) {
+        woItems = customItems;
+      } else if (ver.items && ver.items.length >= 3) {
+        woItems = ver.items.map((it) => ({ id: it.id, title: it.title, hours: it.hours }));
+      } else if (ver.items && ver.items.length > 0) {
+        const existing = ver.items.map((it) => ({ id: it.id, title: it.title, hours: it.hours }));
+        const needed = 3 - existing.length;
+        const totalH = ver.total_hours_snapshot || 0;
+        const existingSum = existing.reduce((s, it) => s + it.hours, 0);
+        const rem = Math.max(0, totalH - existingSum);
+        const defaults = [
+          'Core Deliverables & System Integration',
+          'Automated Verification & Unit Testing',
+          'Production Deployment & Client QA Signoff',
+        ];
+        const extra = Array.from({ length: needed }).map((_, idx) => ({
+          title: defaults[idx] || `Deliverable Scope Task ${existing.length + idx + 1}`,
+          hours: rem > 0 ? Math.round((rem / needed) * 10) / 10 : Math.round((totalH * 0.2) * 10) / 10,
+        }));
+        woItems = [...existing, ...extra];
+      } else {
+        const totalH = ver.total_hours_snapshot || 0;
+        woItems = [
+          { title: 'Database Architecture & Security Configuration', hours: Math.round(totalH * 0.4 * 10) / 10 || 10 },
+          { title: 'Core Workspace Workflows & API Implementation', hours: Math.round(totalH * 0.4 * 10) / 10 || 10 },
+          { title: 'Quality Assurance, Verification & Client Signoff', hours: Math.round(totalH * 0.2 * 10) / 10 || 5 },
+        ];
+      }
+    }
 
     const newWo: WorkOrder = {
       id: `wo-${Date.now()}`,
@@ -803,7 +837,7 @@ export const WorkspaceLayout: React.FC = () => {
       approved_scope_version_id: ver.id,
       work_order_number: woNum,
       work_order_kind: kind,
-      status: 'approved',
+      status: 'in_progress',
       hours_snapshot: ver.total_hours_snapshot,
       total_usd_snapshot: ver.total_usd_snapshot,
       total_bdt_snapshot: finalBdt,
@@ -811,6 +845,7 @@ export const WorkspaceLayout: React.FC = () => {
       approved_at_snapshot: ver.approved_at || new Date().toISOString(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      items: woItems,
     };
 
     setWorkOrders((prev) => [newWo, ...prev]);
@@ -829,6 +864,7 @@ export const WorkspaceLayout: React.FC = () => {
         hours: ver.total_hours_snapshot,
         include_bdt: includeBdt,
         currency_mode: includeBdt ? 'USD + BDT' : 'USD only',
+        items_count: woItems.length,
       },
       reason: includeBdt
         ? 'Official document generated with dual currency (USD + BDT)'
@@ -840,7 +876,7 @@ export const WorkspaceLayout: React.FC = () => {
 
     notify({
       title: `📄 Work Order Created: ${woNum}`,
-      body: `Generated for ${ver.total_hours_snapshot} hrs (${includeBdt ? 'USD + BDT' : 'USD only'}) from approved scope.`,
+      body: `Generated for ${ver.total_hours_snapshot} hrs (${includeBdt ? 'USD + BDT' : 'USD only'}) with ${woItems.length} deliverable tasks.`,
       category: 'estimate_status',
       project_id: selectedProjectId,
       project_name: activeProject?.name,
@@ -863,7 +899,7 @@ export const WorkspaceLayout: React.FC = () => {
             content: [
               {
                 type: 'text',
-                text: `📄 Work Order ${woNum} generated (${includeBdt ? 'USD + BDT' : 'USD only'}). Total: ${totalHoursFormatted}h`,
+                text: `📄 Work Order ${woNum} generated (${includeBdt ? 'USD + BDT' : 'USD only'}). Total: ${totalHoursFormatted}h with ${woItems.length} deliverables breakdown.`,
               },
             ],
           },
@@ -885,10 +921,276 @@ export const WorkspaceLayout: React.FC = () => {
         status: newWo.status,
         authorized_by: currentUser.display_name,
         generated_at: newWo.generated_at,
-        items: ver.items?.map((it) => ({ title: it.title, hours: it.hours })),
+        items: woItems.map((it) => ({ title: it.title, hours: it.hours })),
       },
     };
     setMessages((prev) => [...prev, woConversationMsg]);
+  };
+
+  const handleEditEstimate = (
+    versionId: string,
+    updatedPackageTitle: string,
+    updatedItems: Array<{ title: string; hours: number }>
+  ) => {
+    const ver = versions.find((v) => v.id === versionId);
+    if (!ver) return;
+
+    // Strict Immutability Guard: Cannot edit once approved or superseded
+    if (ver.status === 'approved' || ver.status === 'superseded') {
+      notify({
+        title: 'Action Prohibited',
+        body: 'Approved estimates are legally immutable contracts and cannot be edited.',
+        category: 'system',
+      });
+      return;
+    }
+
+    const totalHours = updatedItems.reduce((acc, it) => acc + (Number(it.hours) || 0), 0);
+    const rateUsd = activeFinancials?.client_rate_usd_per_hour ?? null;
+    const rateBdt = activeFinancials?.client_rate_bdt_per_hour ?? null;
+
+    setVersions((prev) =>
+      prev.map((v) => {
+        if (v.id !== versionId) return v;
+        return {
+          ...v,
+          total_hours_snapshot: totalHours,
+          total_usd_snapshot: rateUsd != null ? totalHours * rateUsd : null,
+          total_bdt_snapshot: rateBdt != null ? totalHours * rateBdt : null,
+          items: updatedItems.map((it, idx) => ({
+            id: `item-${Date.now()}-${idx}`,
+            scope_version_id: versionId,
+            position: idx + 1,
+            title: it.title,
+            hours: Number(it.hours) || 0,
+            is_billable: true,
+            created_at: new Date().toISOString(),
+          })),
+        };
+      })
+    );
+
+    // Update package title if changed
+    setPackages((prev) =>
+      prev.map((p) => (p.id === ver.scope_package_id ? { ...p, title: updatedPackageTitle } : p))
+    );
+
+    // Update conversation card if any message contains this version
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.estimate_version_id === versionId || m.estimate_card?.version_id === versionId) {
+          return {
+            ...m,
+            estimate_card: m.estimate_card
+              ? {
+                  ...m.estimate_card,
+                  package_title: updatedPackageTitle,
+                  total_hours: totalHours,
+                  total_usd: rateUsd != null ? totalHours * rateUsd : null,
+                  total_bdt: rateBdt != null ? totalHours * rateBdt : null,
+                  items: updatedItems,
+                }
+              : null,
+          };
+        }
+        return m;
+      })
+    );
+
+    const auditEntry: AuditEvent = {
+      id: `audit-${Date.now()}`,
+      organization_id: 'org-1',
+      actor_user_id: currentUser.user_id,
+      actor_role_snapshot: currentRole,
+      entity_type: 'scope_versions',
+      entity_id: versionId,
+      action: 'EDIT_ESTIMATE_VERSION',
+      before_state: { hours: ver.total_hours_snapshot, items_count: ver.items?.length || 0 },
+      after_state: { hours: totalHours, items_count: updatedItems.length, title: updatedPackageTitle },
+      reason: 'Estimate line items and hours revised before client approval',
+      server_recorded_at: new Date().toISOString(),
+      source: 'ui',
+    };
+    setAuditEvents((a) => [auditEntry, ...a]);
+
+    notify({
+      title: `✏️ Estimate Updated: v${ver.version_number}.0`,
+      body: `Scope updated to ${totalHours.toFixed(1)} hrs (${updatedItems.length} deliverables).`,
+      category: 'estimate_status',
+      project_id: selectedProjectId,
+      project_name: activeProject?.name,
+    });
+  };
+
+  const handleDeleteEstimate = (versionId: string) => {
+    const ver = versions.find((v) => v.id === versionId);
+    if (!ver) return;
+
+    // Strict Immutability Guard: Cannot delete once approved or superseded
+    if (ver.status === 'approved' || ver.status === 'superseded') {
+      notify({
+        title: 'Action Prohibited',
+        body: 'Approved estimates are legally immutable contracts and cannot be deleted.',
+        category: 'system',
+      });
+      return;
+    }
+
+    setVersions((prev) => prev.filter((v) => v.id !== versionId));
+
+    // Remove or flag associated conversation cards
+    setMessages((prev) =>
+      prev.filter(
+        (m) => m.estimate_version_id !== versionId && m.estimate_card?.version_id !== versionId
+      )
+    );
+
+    const auditEntry: AuditEvent = {
+      id: `audit-${Date.now()}`,
+      organization_id: 'org-1',
+      actor_user_id: currentUser.user_id,
+      actor_role_snapshot: currentRole,
+      entity_type: 'scope_versions',
+      entity_id: versionId,
+      action: 'DELETE_ESTIMATE_VERSION',
+      before_state: { version_number: ver.version_number, hours: ver.total_hours_snapshot, status: ver.status },
+      after_state: null,
+      reason: 'Estimate proposal deleted by administrator before approval',
+      server_recorded_at: new Date().toISOString(),
+      source: 'ui',
+    };
+    setAuditEvents((a) => [auditEntry, ...a]);
+
+    notify({
+      title: `🗑️ Estimate Deleted: v${ver.version_number}.0`,
+      body: `Estimate proposal (${ver.total_hours_snapshot} hrs) has been permanently removed.`,
+      category: 'estimate_status',
+      project_id: selectedProjectId,
+      project_name: activeProject?.name,
+    });
+  };
+
+  const handleEditWorkOrder = (
+    woId: string,
+    updatedItems: Array<{ title: string; hours: number }>
+  ) => {
+    const wo = workOrders.find((w) => w.id === woId);
+    if (!wo) return;
+
+    // Strict Immutability Guard: Prohibited once completed or delivered
+    if (wo.status === 'completed' || wo.status === 'delivered') {
+      notify({
+        title: 'Action Prohibited',
+        body: 'Completed work orders are immutable delivery records and cannot be edited.',
+        category: 'system',
+      });
+      return;
+    }
+
+    const totalHours = updatedItems.reduce((acc, it) => acc + (Number(it.hours) || 0), 0);
+    const rateUsd = activeFinancials?.client_rate_usd_per_hour ?? null;
+    const rateBdt = activeFinancials?.client_rate_bdt_per_hour ?? null;
+
+    setWorkOrders((prev) =>
+      prev.map((w) => {
+        if (w.id !== woId) return w;
+        return {
+          ...w,
+          hours_snapshot: totalHours,
+          total_usd_snapshot: rateUsd != null ? totalHours * rateUsd : w.total_usd_snapshot,
+          total_bdt_snapshot: rateBdt != null && w.total_bdt_snapshot != null ? totalHours * rateBdt : w.total_bdt_snapshot,
+          items: updatedItems,
+          updated_at: new Date().toISOString(),
+        };
+      })
+    );
+
+    // Update conversation card if any message contains this work order
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.work_order_card?.work_order_id === woId) {
+          return {
+            ...m,
+            work_order_card: {
+              ...m.work_order_card,
+              hours_snapshot: totalHours,
+              items: updatedItems,
+            },
+          };
+        }
+        return m;
+      })
+    );
+
+    const auditEntry: AuditEvent = {
+      id: `audit-${Date.now()}`,
+      organization_id: 'org-1',
+      actor_user_id: currentUser.user_id,
+      actor_role_snapshot: currentRole,
+      entity_type: 'work_orders',
+      entity_id: woId,
+      action: 'EDIT_WORK_ORDER',
+      before_state: { hours: wo.hours_snapshot, items_count: wo.items?.length || 0 },
+      after_state: { hours: totalHours, items_count: updatedItems.length },
+      reason: 'Work order deliverables adjusted prior to final delivery signoff',
+      server_recorded_at: new Date().toISOString(),
+      source: 'ui',
+    };
+    setAuditEvents((a) => [auditEntry, ...a]);
+
+    notify({
+      title: `✏️ Work Order Updated: ${wo.work_order_number}`,
+      body: `Work order items revised to ${totalHours.toFixed(1)} hrs.`,
+      category: 'estimate_status',
+      project_id: selectedProjectId,
+      project_name: activeProject?.name,
+    });
+  };
+
+  const handleDeleteWorkOrder = (woId: string) => {
+    const wo = workOrders.find((w) => w.id === woId);
+    if (!wo) return;
+
+    // Strict Immutability Guard: Prohibited once completed or delivered
+    if (wo.status === 'completed' || wo.status === 'delivered') {
+      notify({
+        title: 'Action Prohibited',
+        body: 'Completed work orders are immutable delivery records and cannot be deleted.',
+        category: 'system',
+      });
+      return;
+    }
+
+    setWorkOrders((prev) => prev.filter((w) => w.id !== woId));
+
+    // Remove associated conversation card
+    setMessages((prev) =>
+      prev.filter((m) => m.work_order_card?.work_order_id !== woId)
+    );
+
+    const auditEntry: AuditEvent = {
+      id: `audit-${Date.now()}`,
+      organization_id: 'org-1',
+      actor_user_id: currentUser.user_id,
+      actor_role_snapshot: currentRole,
+      entity_type: 'work_orders',
+      entity_id: woId,
+      action: 'DELETE_WORK_ORDER',
+      before_state: { number: wo.work_order_number, hours: wo.hours_snapshot, status: wo.status },
+      after_state: null,
+      reason: 'Work order deleted by administrator prior to delivery',
+      server_recorded_at: new Date().toISOString(),
+      source: 'ui',
+    };
+    setAuditEvents((a) => [auditEntry, ...a]);
+
+    notify({
+      title: `🗑️ Work Order Deleted: ${wo.work_order_number}`,
+      body: `Work order has been removed from project records.`,
+      category: 'estimate_status',
+      project_id: selectedProjectId,
+      project_name: activeProject?.name,
+    });
   };
 
   const handleUpdateWorkOrderStatus = (woId: string, status: any) => {
@@ -1333,6 +1635,10 @@ export const WorkspaceLayout: React.FC = () => {
             financialSettings={activeFinancials}
             onUpdateFinancials={handleUpdateFinancials}
             onCreateEstimateDraft={handleCreateEstimateDraft}
+            onEditEstimate={handleEditEstimate}
+            onDeleteEstimate={handleDeleteEstimate}
+            onEditWorkOrder={handleEditWorkOrder}
+            onDeleteWorkOrder={handleDeleteWorkOrder}
             onSendEstimate={handleSendEstimate}
             onGenerateWorkOrder={handleGenerateWorkOrder}
             onUpdateWorkOrderStatus={handleUpdateWorkOrderStatus}
@@ -1386,6 +1692,10 @@ export const WorkspaceLayout: React.FC = () => {
             financialSettings={activeFinancials}
             onUpdateFinancials={handleUpdateFinancials}
             onCreateEstimateDraft={handleCreateEstimateDraft}
+            onEditEstimate={handleEditEstimate}
+            onDeleteEstimate={handleDeleteEstimate}
+            onEditWorkOrder={handleEditWorkOrder}
+            onDeleteWorkOrder={handleDeleteWorkOrder}
             onSendEstimate={handleSendEstimate}
             onGenerateWorkOrder={handleGenerateWorkOrder}
             onUpdateWorkOrderStatus={handleUpdateWorkOrderStatus}
@@ -1535,8 +1845,8 @@ export const WorkspaceLayout: React.FC = () => {
           packageItem={packages.find((p) => p.id === workOrderModalVersion.scope_package_id)}
           projectName={activeProject.name}
           canViewMoney={canViewMoney}
-          onConfirm={(vId, kind, includeBdt) => {
-            handleGenerateWorkOrder(vId, kind, includeBdt);
+          onConfirm={(vId, kind, includeBdt, items) => {
+            handleGenerateWorkOrder(vId, kind, includeBdt, items);
             setWorkOrderModalVersion(null);
           }}
         />

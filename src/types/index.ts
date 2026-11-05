@@ -272,6 +272,7 @@ export interface WorkOrder {
   document_sha256?: string | null;
   created_at: string;
   updated_at: string;
+  items?: Array<{ id?: string; title: string; hours: number }>;
 }
 
 export interface WorkOrderItem {

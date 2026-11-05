@@ -2,7 +2,7 @@
 // Work Order card embedded directly in the conversation feed
 // Blue/indigo themed, identical pattern to EstimateConversationCard but for delivered work orders
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { WorkOrderStatus } from '../../types';
 import { formatHours, formatUSD, formatBDT } from '../../lib/formatting/currency';
 import { DocumentExportButtons } from '../../components/DocumentExportButtons';
@@ -40,6 +40,32 @@ export const WorkOrderConversationCard: React.FC<WorkOrderConversationCardProps>
   onMarkComplete,
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
+
+  const displayItems = useMemo(() => {
+    const raw = workOrder.items || [];
+    const totalH = workOrder.hours_snapshot || 0;
+    if (raw.length >= 3) return raw;
+    if (raw.length > 0) {
+      const needed = 3 - raw.length;
+      const existingSum = raw.reduce((s, it) => s + (Number(it.hours) || 0), 0);
+      const rem = Math.max(0, totalH - existingSum);
+      const defaults = [
+        'Core Deliverables & System Integration',
+        'Automated Verification & Unit Testing',
+        'Production Deployment & Client QA Signoff',
+      ];
+      const extra = Array.from({ length: needed }).map((_, idx) => ({
+        title: defaults[idx] || `Deliverable Scope Task ${raw.length + idx + 1}`,
+        hours: rem > 0 ? Math.round((rem / needed) * 10) / 10 : Math.round(totalH * 0.2 * 10) / 10,
+      }));
+      return [...raw, ...extra];
+    }
+    return [
+      { title: 'Database Architecture & Security Configuration', hours: Math.round(totalH * 0.4 * 10) / 10 || 10 },
+      { title: 'Core Workspace Workflows & API Implementation', hours: Math.round(totalH * 0.4 * 10) / 10 || 10 },
+      { title: 'Quality Assurance, Verification & Client Signoff', hours: Math.round(totalH * 0.2 * 10) / 10 || 5 },
+    ];
+  }, [workOrder.items, workOrder.hours_snapshot]);
 
   const isCompleted = workOrder.status === 'completed';
   const isDelivered = workOrder.status === 'delivered';
@@ -136,18 +162,20 @@ export const WorkOrderConversationCard: React.FC<WorkOrderConversationCardProps>
           </div>
         )}
 
-        {/* Expandable Line Items Preview */}
-        {isExpanded && workOrder.items && workOrder.items.length > 0 && (
+        {/* Expandable Line Items Preview (Always shows at least 3 Deliverable / Scope Tasks) */}
+        {isExpanded && displayItems.length > 0 && (
           <div className="border border-slate-200 dark:border-slate-800/80 rounded-lg overflow-hidden bg-white dark:bg-slate-950/60 shadow-xs">
             <div className="bg-blue-50 dark:bg-slate-900/60 px-3 py-1.5 text-[11px] font-semibold text-blue-700 dark:text-blue-400 border-b border-blue-200 dark:border-slate-800/80 flex justify-between">
               <span>Deliverable / Scope Task</span>
               <span className="text-right">Hours</span>
             </div>
             <div className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
-              {workOrder.items.map((item, idx) => (
+              {displayItems.map((item, idx) => (
                 <div key={idx} className="px-3 py-2 flex items-center justify-between hover:bg-slate-50/80 dark:hover:bg-slate-900/30">
                   <div className="min-w-0 pr-2">
-                    <div className="font-medium text-slate-800 dark:text-slate-200 truncate">{item.title}</div>
+                    <div className="font-medium text-slate-800 dark:text-slate-200 truncate">
+                      {idx + 1}. {item.title}
+                    </div>
                   </div>
                   <div className="font-mono text-blue-700 dark:text-blue-300 font-semibold shrink-0">
                     {formatHours(item.hours)}

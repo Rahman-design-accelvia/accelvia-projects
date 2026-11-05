@@ -128,7 +128,14 @@ export function generateWorkOrderText(opts: ExportWorkOrderOptions): { text: str
   const totalBdt = workOrder.total_bdt_snapshot;
   const authorizedBy = ('authorized_by' in workOrder ? workOrder.authorized_by : 'Management') || 'Management';
   const genDate = ('generated_at' in workOrder && workOrder.generated_at ? new Date(workOrder.generated_at).toLocaleDateString() : new Date().toLocaleDateString());
-  const items = ('items' in workOrder && workOrder.items ? workOrder.items : []);
+  const rawItems = ('items' in workOrder && workOrder.items ? workOrder.items : []);
+  const items = rawItems.length > 0
+    ? rawItems
+    : [
+        { title: 'Database Architecture & Security Configuration', hours: Math.round(hours * 0.4 * 10) / 10 || 10 },
+        { title: 'Core Workspace Workflows & API Implementation', hours: Math.round(hours * 0.4 * 10) / 10 || 10 },
+        { title: 'Quality Assurance, Verification & Client Signoff', hours: Math.round(hours * 0.2 * 10) / 10 || 5 },
+      ];
 
   // Plain text
   let text = `============================================================\n`;
@@ -550,7 +557,14 @@ export function buildWorkOrderPDFHtml(opts: ExportWorkOrderOptions): string {
   const totalBdt = workOrder.total_bdt_snapshot;
   const authorizedBy = ('authorized_by' in workOrder ? workOrder.authorized_by : 'Management') || 'Management';
   const genDate = ('generated_at' in workOrder && workOrder.generated_at ? new Date(workOrder.generated_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }));
-  const items = ('items' in workOrder && workOrder.items ? workOrder.items : []);
+  const rawItems = ('items' in workOrder && workOrder.items ? workOrder.items : []);
+  const items = rawItems.length > 0
+    ? rawItems
+    : [
+        { title: 'Database Architecture & Security Configuration', hours: Math.round(hours * 0.4 * 10) / 10 || 10 },
+        { title: 'Core Workspace Workflows & API Implementation', hours: Math.round(hours * 0.4 * 10) / 10 || 10 },
+        { title: 'Quality Assurance, Verification & Client Signoff', hours: Math.round(hours * 0.2 * 10) / 10 || 5 },
+      ];
 
   return `
     <div class="header">
