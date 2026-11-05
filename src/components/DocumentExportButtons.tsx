@@ -98,8 +98,8 @@ export const DocumentExportButtons: React.FC<DocumentExportButtonsProps> = (prop
   };
 
   const btnClasses = size === 'xs'
-    ? 'px-2 py-1 text-[11px] rounded-md font-medium'
-    : 'px-2.5 py-1.5 text-xs rounded-lg font-semibold';
+    ? 'px-2 py-1 text-[11px] rounded-md font-medium whitespace-nowrap cursor-pointer'
+    : 'px-2.5 py-1.5 text-xs rounded-lg font-semibold whitespace-nowrap cursor-pointer';
 
   return (
     <div className="flex items-center gap-1.5 shrink-0">

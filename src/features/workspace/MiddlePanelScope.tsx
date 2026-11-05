@@ -551,15 +551,29 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                           </div>
                         )}
 
-                        {/* Dual-Time Event Timestamp */}
-                        <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between text-[11px]">
-                          <DualTimeBadge
-                            isoInstant={ver.approved_at || ver.sent_at || ver.created_at}
-                            projectIanaTimezone={project.timezone}
-                          />
+                        {/* Dual-Time Event Timestamp & Responsive Actions Container */}
+                        <div className="pt-2 border-t border-slate-200 dark:border-slate-800/60 flex flex-col gap-2">
+                          {/* Row 1: Dual-Time Stamp & Immutability Badge */}
+                          <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                            <DualTimeBadge
+                              isoInstant={ver.approved_at || ver.sent_at || ver.created_at}
+                              projectIanaTimezone={project.timezone}
+                            />
 
-                          {/* Action Buttons */}
-                          <div className="flex items-center gap-1">
+                            {/* If Approved: Strictly Immutable Pill */}
+                            {ver.status === 'approved' && (
+                              <span
+                                className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 text-[10px] font-mono flex items-center gap-1 shrink-0"
+                                title="Approved estimates are legally immutable contracts and cannot be edited or deleted"
+                              >
+                                <Lock className="w-2.5 h-2.5 text-slate-400" />
+                                <span>Locked</span>
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Row 2: Action Buttons (Responsive flex-wrap) */}
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
                             <DocumentExportButtons
                               type="estimate"
                               version={ver}
@@ -573,11 +587,12 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                             {/* If Draft: Show Send to Client */}
                             {ver.status === 'draft' && canViewMoney && (
                               <button
+                                type="button"
                                 onClick={() => {
                                   setSelectedVersionForSend(ver);
                                   setIsSendModalOpen(true);
                                 }}
-                                className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 dark:bg-teal-500 dark:hover:bg-teal-400 text-white dark:text-slate-950 font-semibold text-[11px] flex items-center gap-1 transition shadow-xs cursor-pointer"
+                                className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 dark:bg-teal-500 dark:hover:bg-teal-400 text-white dark:text-slate-950 font-semibold text-[11px] flex items-center gap-1 transition shadow-xs cursor-pointer whitespace-nowrap"
                               >
                                 <Send className="w-3 h-3" />
                                 <span>Send</span>
@@ -587,8 +602,9 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                             {/* If Pending: Review Link */}
                             {ver.status === 'pending' && (
                               <button
+                                type="button"
                                 onClick={() => onOpenClientReviewModal(ver.id)}
-                                className="px-2 py-1 rounded bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 text-[11px] font-medium flex items-center gap-1 transition cursor-pointer"
+                                className="px-2.5 py-1 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 hover:bg-amber-500/30 text-[11px] font-medium flex items-center gap-1 transition cursor-pointer whitespace-nowrap border border-amber-500/30"
                                 title="Open Client Review Portal Simulator"
                               >
                                 <ExternalLink className="w-3 h-3" />
@@ -602,7 +618,7 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => setEditingVersion({ version: ver, packageTitle: pkg.title })}
-                                  className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-medium flex items-center gap-1 transition cursor-pointer"
+                                  className="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-medium flex items-center gap-1 transition cursor-pointer whitespace-nowrap border border-slate-200 dark:border-slate-700"
                                   title="Edit estimate deliverables & hours"
                                 >
                                   <Edit3 className="w-3 h-3 text-blue-500" />
@@ -611,7 +627,7 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => setDeletingEstimate({ version: ver, packageTitle: pkg.title })}
-                                  className="px-2 py-1 rounded bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 text-[11px] font-medium flex items-center gap-1 transition cursor-pointer"
+                                  className="px-2.5 py-1 rounded bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 text-[11px] font-medium flex items-center gap-1 transition cursor-pointer whitespace-nowrap border border-rose-200 dark:border-rose-900/60"
                                   title="Delete estimate proposal"
                                 >
                                   <Trash2 className="w-3 h-3" />
@@ -620,27 +636,16 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                               </>
                             )}
 
-                            {/* If Approved: Strictly Immutable, cannot edit or delete */}
-                            {ver.status === 'approved' && (
-                              <>
-                                <span
-                                  className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 text-[10px] font-mono flex items-center gap-1 cursor-help"
-                                  title="Approved estimates are legally immutable contracts and cannot be edited or deleted"
-                                >
-                                  <Lock className="w-2.5 h-2.5 text-slate-400" />
-                                  <span>Locked</span>
-                                </span>
-
-                                {canViewMoney && (
-                                  <button
-                                    onClick={() => setSelectedVersionForWorkOrder(ver)}
-                                    className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 text-[11px] font-medium flex items-center gap-1 transition cursor-pointer"
-                                  >
-                                    <FileCheck className="w-3 h-3" />
-                                    <span>Gen Work Order</span>
-                                  </button>
-                                )}
-                              </>
+                            {/* If Approved: Generate Work Order Button */}
+                            {ver.status === 'approved' && canViewMoney && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedVersionForWorkOrder(ver)}
+                                className="px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/30 text-[11px] font-semibold flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap border border-emerald-500/30"
+                              >
+                                <FileCheck className="w-3 h-3 text-emerald-600 dark:text-teal-400" />
+                                <span>Gen Work Order</span>
+                              </button>
                             )}
                           </div>
                         </div>
@@ -722,13 +727,29 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                     </div>
                   )}
 
-                  {/* Dual-Time Generation Stamp */}
-                  <div className="flex items-center justify-between pt-1">
-                    <DualTimeBadge
-                      isoInstant={wo.generated_at}
-                      projectIanaTimezone={project.timezone}
-                    />
-                    <div className="flex items-center gap-1.5 flex-wrap">
+                  {/* Dual-Time Generation Stamp & Responsive Actions Container */}
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800/60 flex flex-col gap-2">
+                    {/* Row 1: Dual-Time Stamp & Lock Pill */}
+                    <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                      <DualTimeBadge
+                        isoInstant={wo.generated_at}
+                        projectIanaTimezone={project.timezone}
+                      />
+
+                      {/* Locked for completed / delivered work orders */}
+                      {(wo.status === 'completed' || wo.status === 'delivered') && (
+                        <span
+                          className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 text-[10px] font-mono flex items-center gap-1 shrink-0"
+                          title="Completed and delivered work orders are legally immutable and cannot be edited or deleted"
+                        >
+                          <Lock className="w-2.5 h-2.5 text-slate-400" />
+                          <span>Locked</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Row 2: Action Buttons (Responsive flex-wrap) */}
+                    <div className="flex items-center justify-end gap-1.5 flex-wrap">
                       <DocumentExportButtons
                         type="work_order"
                         workOrder={wo}
@@ -739,8 +760,9 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                       />
 
                       <button
+                        type="button"
                         onClick={() => setPreviewWorkOrder(wo)}
-                        className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] flex items-center gap-1 transition cursor-pointer"
+                        className="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-medium flex items-center gap-1 transition cursor-pointer whitespace-nowrap border border-slate-200 dark:border-slate-700"
                       >
                         <Eye className="w-3 h-3" />
                         <span>View</span>
@@ -752,7 +774,7 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                           <button
                             type="button"
                             onClick={() => setEditingWorkOrder(wo)}
-                            className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] flex items-center gap-1 transition cursor-pointer"
+                            className="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-medium flex items-center gap-1 transition cursor-pointer whitespace-nowrap border border-slate-200 dark:border-slate-700"
                             title="Edit work order tasks & hours"
                           >
                             <Edit3 className="w-3 h-3 text-blue-400" />
@@ -761,7 +783,7 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                           <button
                             type="button"
                             onClick={() => setDeletingWorkOrder(wo)}
-                            className="px-2 py-1 rounded bg-rose-950/40 hover:bg-rose-900/50 text-rose-400 text-[11px] flex items-center gap-1 transition cursor-pointer"
+                            className="px-2.5 py-1 rounded bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 text-[11px] font-medium flex items-center gap-1 transition cursor-pointer whitespace-nowrap border border-rose-200 dark:border-rose-900/60"
                             title="Delete work order"
                           >
                             <Trash2 className="w-3 h-3" />
@@ -770,21 +792,11 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                         </>
                       )}
 
-                      {/* Locked for completed / delivered work orders */}
-                      {(wo.status === 'completed' || wo.status === 'delivered') && (
-                        <span
-                          className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-500 text-[10px] font-mono flex items-center gap-1 cursor-help"
-                          title="Completed and delivered work orders are legally immutable and cannot be edited or deleted"
-                        >
-                          <Lock className="w-2.5 h-2.5 text-slate-400" />
-                          <span>Locked</span>
-                        </span>
-                      )}
-
                       {canViewMoney && wo.status === 'in_progress' && (
                         <button
+                          type="button"
                           onClick={() => onUpdateWorkOrderStatus(wo.id, 'delivered')}
-                          className="px-2 py-1 rounded bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30 text-[11px] font-medium transition cursor-pointer"
+                          className="px-2.5 py-1 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 hover:bg-amber-500/30 text-[11px] font-semibold transition cursor-pointer whitespace-nowrap border border-amber-500/30"
                         >
                           Mark Delivered
                         </button>
@@ -792,10 +804,11 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
 
                       {canViewMoney && wo.status === 'delivered' && (
                         <button
+                          type="button"
                           onClick={() => onUpdateWorkOrderStatus(wo.id, 'completed')}
-                          className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 text-[11px] font-medium transition cursor-pointer"
+                          className="px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/30 text-[11px] font-semibold transition cursor-pointer whitespace-nowrap border border-emerald-500/30"
                         >
-                          Complete
+                          Mark Completed
                         </button>
                       )}
                     </div>

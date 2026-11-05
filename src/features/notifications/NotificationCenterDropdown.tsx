@@ -46,7 +46,6 @@ export const NotificationCenterDropdown: React.FC<NotificationCenterDropdownProp
     clearAll,
     removeNotification,
     requestPermission,
-    sendTestNotification,
   } = useNotifications();
 
   const [activeTab, setActiveTab] = useState<'all' | 'estimates' | 'chat'>('all');
@@ -205,36 +204,6 @@ export const NotificationCenterDropdown: React.FC<NotificationCenterDropdownProp
             </button>
           </div>
         )}
-      </div>
-
-      {/* Interactive Push Test Bar */}
-      <div className="px-3.5 py-2 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 flex items-center justify-between gap-2 text-[10px]">
-        <span className="font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-          Test Push:
-        </span>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => sendTestNotification('estimate_approved')}
-            className="px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 transition font-medium"
-          >
-            Approved Scope
-          </button>
-          <button
-            type="button"
-            onClick={() => sendTestNotification('conversation')}
-            className="px-2 py-0.5 rounded border border-teal-300 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 hover:bg-teal-100 transition font-medium"
-          >
-            Chat Message
-          </button>
-          <button
-            type="button"
-            onClick={() => sendTestNotification('estimate_status')}
-            className="px-2 py-0.5 rounded border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 hover:bg-amber-100 transition font-medium"
-          >
-            Status Change
-          </button>
-        </div>
       </div>
 
       {/* Filter Tabs */}
