@@ -1,7 +1,7 @@
 // src/features/workspace/WorkspaceLayout.tsx
 // Core Three-Panel Workspace Layout with live state management
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
 import { LeftPanelClients } from './LeftPanelClients';
@@ -313,9 +313,14 @@ export const WorkspaceLayout: React.FC = () => {
     }
   }, []);
 
+  const isLoadedFromCloud = useRef(false);
+
   // Fetch complete workspace data from Supabase centrally on initial load
   const fetchSupabaseWorkspaceData = useCallback(async () => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured) {
+      isLoadedFromCloud.current = true;
+      return;
+    }
     try {
       const { data, error } = await supabase.from('app_workspace_data').select('*');
       if (!error && Array.isArray(data) && data.length > 0) {
@@ -356,6 +361,8 @@ export const WorkspaceLayout: React.FC = () => {
       }
     } catch (e) {
       console.warn('Error fetching Supabase workspace data:', e);
+    } finally {
+      isLoadedFromCloud.current = true;
     }
   }, []);
 
@@ -402,42 +409,42 @@ export const WorkspaceLayout: React.FC = () => {
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_CLIENTS, JSON.stringify(clients)); } catch {}
-    if (clients.length > 0) syncToSupabase('clients', clients);
+    if (isLoadedFromCloud.current && clients.length > 0) syncToSupabase('clients', clients);
   }, [clients, syncToSupabase]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(projects)); } catch {}
-    if (projects.length > 0) syncToSupabase('projects', projects);
+    if (isLoadedFromCloud.current && projects.length > 0) syncToSupabase('projects', projects);
   }, [projects, syncToSupabase]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_FINANCIALS, JSON.stringify(financials)); } catch {}
-    if (Object.keys(financials).length > 0) syncToSupabase('financials', financials);
+    if (isLoadedFromCloud.current && Object.keys(financials).length > 0) syncToSupabase('financials', financials);
   }, [financials, syncToSupabase]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_PACKAGES, JSON.stringify(packages)); } catch {}
-    if (packages.length > 0) syncToSupabase('packages', packages);
+    if (isLoadedFromCloud.current && packages.length > 0) syncToSupabase('packages', packages);
   }, [packages, syncToSupabase]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_VERSIONS, JSON.stringify(versions)); } catch {}
-    if (versions.length > 0) syncToSupabase('versions', versions);
+    if (isLoadedFromCloud.current && versions.length > 0) syncToSupabase('versions', versions);
   }, [versions, syncToSupabase]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_WORK_ORDERS, JSON.stringify(workOrders)); } catch {}
-    if (workOrders.length > 0) syncToSupabase('work_orders', workOrders);
+    if (isLoadedFromCloud.current && workOrders.length > 0) syncToSupabase('work_orders', workOrders);
   }, [workOrders, syncToSupabase]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(messages)); } catch {}
-    if (messages.length > 0) syncToSupabase('messages', messages);
+    if (isLoadedFromCloud.current && messages.length > 0) syncToSupabase('messages', messages);
   }, [messages, syncToSupabase]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_AUDIT, JSON.stringify(auditEvents)); } catch {}
-    if (auditEvents.length > 0) syncToSupabase('audit_events', auditEvents);
+    if (isLoadedFromCloud.current && auditEvents.length > 0) syncToSupabase('audit_events', auditEvents);
   }, [auditEvents, syncToSupabase]);
 
   // Cross-tab real-time sync & notifications receiver
