@@ -1,7 +1,7 @@
 // src/features/workspace/WorkspaceLayout.tsx
 // Core Three-Panel Workspace Layout with live state management
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
 import { LeftPanelClients } from './LeftPanelClients';
@@ -23,6 +23,8 @@ import {
   VoiceNoteData
 } from '../../types';
 import {
+  supabase,
+  isSupabaseConfigured,
   SEED_CLIENTS,
   SEED_PROJECTS,
   SEED_PACKAGES,
@@ -297,38 +299,146 @@ export const WorkspaceLayout: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Synchronize state across browser sessions and persist to localStorage
+  // Synchronize state across browser sessions and persist to localStorage + Supabase central cloud
+  const syncToSupabase = useCallback(async (key: string, value: any) => {
+    if (!isSupabaseConfigured) return;
+    try {
+      await supabase.from('app_workspace_data').upsert({
+        key,
+        value,
+        updated_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.warn(`Could not sync ${key} to Supabase:`, e);
+    }
+  }, []);
+
+  // Fetch complete workspace data from Supabase centrally on initial load
+  const fetchSupabaseWorkspaceData = useCallback(async () => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const { data, error } = await supabase.from('app_workspace_data').select('*');
+      if (!error && Array.isArray(data) && data.length > 0) {
+        data.forEach((row) => {
+          if (row.key === 'clients' && Array.isArray(row.value) && row.value.length > 0) {
+            setClients(row.value);
+            try { localStorage.setItem(STORAGE_KEY_CLIENTS, JSON.stringify(row.value)); } catch {}
+          }
+          if (row.key === 'projects' && Array.isArray(row.value) && row.value.length > 0) {
+            setProjects(row.value);
+            try { localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(row.value)); } catch {}
+          }
+          if (row.key === 'packages' && Array.isArray(row.value)) {
+            setPackages(row.value);
+            try { localStorage.setItem(STORAGE_KEY_PACKAGES, JSON.stringify(row.value)); } catch {}
+          }
+          if (row.key === 'versions' && Array.isArray(row.value)) {
+            setVersions(row.value);
+            try { localStorage.setItem(STORAGE_KEY_VERSIONS, JSON.stringify(row.value)); } catch {}
+          }
+          if (row.key === 'work_orders' && Array.isArray(row.value)) {
+            setWorkOrders(row.value);
+            try { localStorage.setItem(STORAGE_KEY_WORK_ORDERS, JSON.stringify(row.value)); } catch {}
+          }
+          if (row.key === 'messages' && Array.isArray(row.value)) {
+            setMessages(row.value);
+            try { localStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(row.value)); } catch {}
+          }
+          if (row.key === 'financials' && row.value && typeof row.value === 'object') {
+            setFinancials(row.value);
+            try { localStorage.setItem(STORAGE_KEY_FINANCIALS, JSON.stringify(row.value)); } catch {}
+          }
+          if (row.key === 'audit_events' && Array.isArray(row.value)) {
+            setAuditEvents(row.value);
+            try { localStorage.setItem(STORAGE_KEY_AUDIT, JSON.stringify(row.value)); } catch {}
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('Error fetching Supabase workspace data:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSupabaseWorkspaceData();
+  }, [fetchSupabaseWorkspaceData]);
+
+  // Real-time synchronization across different devices and browsers via Supabase Realtime
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    const channel = supabase
+      .channel('app_workspace_sync_realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'app_workspace_data' },
+        (payload) => {
+          const key = (payload.new as any)?.key;
+          const value = (payload.new as any)?.value;
+          if (!key || !value) return;
+
+          if (key === 'clients') setClients(value);
+          if (key === 'projects') setProjects(value);
+          if (key === 'packages') setPackages(value);
+          if (key === 'versions') setVersions(value);
+          if (key === 'work_orders') setWorkOrders(value);
+          if (key === 'messages') setMessages(value);
+          if (key === 'financials') setFinancials(value);
+          if (key === 'audit_events') setAuditEvents(value);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Auto-select first project if current selectedProjectId is invalid or not in loaded projects
+  useEffect(() => {
+    if (projects.length > 0 && !projects.some((p) => p.id === selectedProjectId)) {
+      setSelectedProjectId(projects[0].id);
+    }
+  }, [projects, selectedProjectId]);
+
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_CLIENTS, JSON.stringify(clients)); } catch {}
-  }, [clients]);
+    if (clients.length > 0) syncToSupabase('clients', clients);
+  }, [clients, syncToSupabase]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(projects)); } catch {}
-  }, [projects]);
+    if (projects.length > 0) syncToSupabase('projects', projects);
+  }, [projects, syncToSupabase]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_FINANCIALS, JSON.stringify(financials)); } catch {}
-  }, [financials]);
+    if (Object.keys(financials).length > 0) syncToSupabase('financials', financials);
+  }, [financials, syncToSupabase]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_PACKAGES, JSON.stringify(packages)); } catch {}
-  }, [packages]);
+    if (packages.length > 0) syncToSupabase('packages', packages);
+  }, [packages, syncToSupabase]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_VERSIONS, JSON.stringify(versions)); } catch {}
-  }, [versions]);
+    if (versions.length > 0) syncToSupabase('versions', versions);
+  }, [versions, syncToSupabase]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_WORK_ORDERS, JSON.stringify(workOrders)); } catch {}
-  }, [workOrders]);
+    if (workOrders.length > 0) syncToSupabase('work_orders', workOrders);
+  }, [workOrders, syncToSupabase]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(messages)); } catch {}
-  }, [messages]);
+    if (messages.length > 0) syncToSupabase('messages', messages);
+  }, [messages, syncToSupabase]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_AUDIT, JSON.stringify(auditEvents)); } catch {}
-  }, [auditEvents]);
+    if (auditEvents.length > 0) syncToSupabase('audit_events', auditEvents);
+  }, [auditEvents, syncToSupabase]);
 
   // Cross-tab real-time sync & notifications receiver
   useEffect(() => {
