@@ -37,7 +37,9 @@ export const TeamManagementModal: React.FC<TeamManagementModalProps> = ({ isOpen
     approveRegistration, 
     rejectRegistration, 
     addTeamMember, 
-    removeTeamMember 
+    removeTeamMember,
+    isSuperAdmin,
+    isAdmin
   } = useAuth();
 
   const [activeTab, setActiveTab] = useState<'roster' | 'pending' | 'add'>('roster');
@@ -137,8 +139,12 @@ Your account has been activated by the Super Admin:
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Team & Access Governance (Super Admin Only)"
-      subtitle="Super Admin master authority: approve registrations, assign roles (Admin / Member), and manage team access"
+      title={isSuperAdmin ? "Team & Access Governance" : "Team & Member Management"}
+      subtitle={
+        isSuperAdmin
+          ? "Super Admin master authority: approve registrations, assign roles (Admin / Member), and manage team access"
+          : "Admin workspace console: add new members & admins, and approve user registrations"
+      }
       maxWidth="4xl"
     >
       <div className="space-y-4 text-xs text-slate-800 dark:text-slate-200">

@@ -303,7 +303,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isMember = currentRole === 'member';
 
   const canViewMoney = isSuperAdmin || isAdmin;
-  const canManageUsers = isSuperAdmin;
+  const canManageUsers = isSuperAdmin || isAdmin;
   const canAccessAudit = isSuperAdmin;
   const canCorrectEventTime = isSuperAdmin;
 

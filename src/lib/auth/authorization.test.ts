@@ -4,7 +4,7 @@ import { UserRole, SafeMessage, ProjectFinancialSettings } from '../../types';
 
 // Role capability checks based on ADR 0006 and Section 4 of build spec
 export function canManageUsers(role: UserRole): boolean {
-  return role === 'super_admin';
+  return role === 'super_admin' || role === 'admin';
 }
 
 export function canViewFinancialSettings(role: UserRole): boolean {
@@ -70,9 +70,9 @@ export function sanitizeFinancialsForRole<T extends { total_usd_snapshot?: numbe
 }
 
 describe('Role & Permission Authorization Boundary Tests', () => {
-  it('strictly restricts user invitation and role management to Super Admin', () => {
+  it('allows Super Admin and Admin to add members and admins, denying Member', () => {
     expect(canManageUsers('super_admin')).toBe(true);
-    expect(canManageUsers('admin')).toBe(false);
+    expect(canManageUsers('admin')).toBe(true);
     expect(canManageUsers('member')).toBe(false);
   });
 
