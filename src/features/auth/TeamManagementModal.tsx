@@ -133,7 +133,18 @@ Your account has been activated by the Super Admin:
     }
   };
 
-  const activeRoster = teamMembers.filter((m) => m.status === 'active' || !m.status);
+  // Active roster filter: Admins cannot see Super Admin accounts in the team roster
+  const activeRoster = teamMembers.filter((m) => {
+    const isActive = m.status === 'active' || !m.status;
+    if (!isActive) return false;
+    if (!isSuperAdmin && m.role === 'super_admin') return false;
+    return true;
+  });
+
+  // Pending registrations filter: Admins cannot see or approve Super Admin requests
+  const visiblePending = isSuperAdmin
+    ? pendingRegistrations
+    : pendingRegistrations.filter((p) => p.role !== 'super_admin' && p.requested_role !== 'super_admin');
 
   return (
     <Modal
@@ -179,9 +190,9 @@ Your account has been activated by the Super Admin:
           >
             <Clock className="w-3.5 h-3.5" />
             <span>Pending Approvals</span>
-            {pendingRegistrations.length > 0 && (
+            {visiblePending.length > 0 && (
               <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-rose-500 text-white font-mono animate-pulse">
-                {pendingRegistrations.length}
+                {visiblePending.length}
               </span>
             )}
           </button>
@@ -217,11 +228,11 @@ Your account has been activated by the Super Admin:
               <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <div>
                 <strong>Self-Registration Approval Queue:</strong> New users who registered via the login screen are held in this queue.
-                As Super Admin, you can review their details and activate them as either an <strong>Admin</strong> or <strong>Member</strong>.
+                As {isSuperAdmin ? 'Super Admin' : 'Admin'}, you can review their details and activate them as either an <strong>Admin</strong> or <strong>Member</strong>.
               </div>
             </div>
 
-            {pendingRegistrations.length === 0 ? (
+            {visiblePending.length === 0 ? (
               <div className="py-8 text-center text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-900 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
                 <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2 opacity-60" />
                 <p className="font-semibold text-xs text-slate-700 dark:text-slate-300">All caught up!</p>
@@ -229,7 +240,7 @@ Your account has been activated by the Super Admin:
               </div>
             ) : (
               <div className="space-y-2">
-                {pendingRegistrations.map((cand) => (
+                {visiblePending.map((cand) => (
                   <div
                     key={cand.user_id}
                     className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-amber-300 dark:hover:border-amber-700/60 transition shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3"

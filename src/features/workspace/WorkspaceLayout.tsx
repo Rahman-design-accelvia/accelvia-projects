@@ -77,6 +77,11 @@ export const WorkspaceLayout: React.FC = () => {
   const { notify, unreadCount } = useNotifications();
   const { companyName } = useOrganization();
 
+  // Pending registrations visible to current role (Admins cannot see Super Admin requests)
+  const visiblePendingCount = isSuperAdmin
+    ? pendingRegistrations.length
+    : pendingRegistrations.filter((p) => p.role !== 'super_admin' && p.requested_role !== 'super_admin').length;
+
   // Navigation & dropdown states
   const [isNotificationMenuOpen, setIsNotificationMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -1553,7 +1558,7 @@ export const WorkspaceLayout: React.FC = () => {
 
 
           {/* Super Admin & Admin Pending Registrations Quick Pill */}
-          {(isSuperAdmin || isAdmin) && pendingRegistrations.length > 0 && (
+          {(isSuperAdmin || isAdmin) && visiblePendingCount > 0 && (
             <button
               type="button"
               onClick={() => setIsTeamModalOpen(true)}
@@ -1561,8 +1566,8 @@ export const WorkspaceLayout: React.FC = () => {
               title="Review and approve pending user registrations"
             >
               <Clock className="w-3.5 h-3.5 text-amber-500" />
-              <span className="hidden sm:inline">{pendingRegistrations.length} Pending Approval{pendingRegistrations.length > 1 ? 's' : ''}</span>
-              <span className="sm:hidden">{pendingRegistrations.length}</span>
+              <span className="hidden sm:inline">{visiblePendingCount} Pending Approval{visiblePendingCount > 1 ? 's' : ''}</span>
+              <span className="sm:hidden">{visiblePendingCount}</span>
             </button>
           )}
 
@@ -1611,9 +1616,9 @@ export const WorkspaceLayout: React.FC = () => {
                       <Users className="w-3.5 h-3.5" />
                       <span>Team & Approvals</span>
                     </div>
-                    {pendingRegistrations.length > 0 && (
+                    {visiblePendingCount > 0 && (
                       <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-rose-500 text-white font-mono font-bold animate-pulse">
-                        {pendingRegistrations.length}
+                        {visiblePendingCount}
                       </span>
                     )}
                   </button>
