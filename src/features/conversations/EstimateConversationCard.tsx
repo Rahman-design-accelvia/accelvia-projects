@@ -33,13 +33,18 @@ export const EstimateConversationCard: React.FC<EstimateConversationCardProps> =
   onApprove,
   onGenerateWorkOrder,
 }) => {
-  const { canViewMoney, isSuperAdmin, isAdmin } = useAuth();
+  const { canViewMoney, isSuperAdmin, isAdmin, isMember } = useAuth();
   const [isExpanded, setIsExpanded] = useState(true);
   const [isApproving, setIsApproving] = useState(false);
 
   const isApproved = version.status === 'approved';
   const isPending = version.status === 'pending';
   const canApprove = (isSuperAdmin || isAdmin) && isPending;
+
+  // Strict Rule: Members can ONLY see the estimate scopes and hours AFTER approval from the admin
+  if (isMember && !isApproved) {
+    return null;
+  }
 
   const handleApproveClick = (e: React.MouseEvent) => {
     e.stopPropagation();

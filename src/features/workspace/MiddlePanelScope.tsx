@@ -231,6 +231,11 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
   }));
   const totalApprovedHours = calculateProjectApprovedHours(packagesWithVersions);
 
+  // Authoritative approved versions count for Member visibility
+  const approvedVersionsCount = useMemo(() => {
+    return versions.filter((v) => v.status === 'approved').length;
+  }, [versions]);
+
   const handleSendEstimateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedVersionForSend) return;
@@ -439,7 +444,7 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
             style={activeTab === 'scope' ? { borderBottomColor: accentColor, color: accentColor } : undefined}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>Scope Packages & Versions ({versions.length})</span>
+            <span>Scope Packages & Versions ({isMember ? approvedVersionsCount : versions.length})</span>
           </button>
           <button
             onClick={() => setActiveTab('work-orders')}
@@ -483,12 +488,33 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
             )}
 
             {/* Packages & Versions List */}
-            {packages.map((pkg) => {
-              const pkgVersions = versions
-                .filter((v) => v.scope_package_id === pkg.id)
-                .sort((a, b) => b.version_number - a.version_number);
+            {(() => {
+              const visiblePackages = packages.filter((pkg) => {
+                if (!isMember) return true;
+                return versions.some((v) => v.scope_package_id === pkg.id && v.status === 'approved');
+              });
 
-              return (
+              if (isMember && visiblePackages.length === 0) {
+                return (
+                  <div className="text-center py-12 px-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20 text-slate-500 space-y-2">
+                    <FileSpreadsheet className="w-8 h-8 mx-auto text-slate-400 dark:text-slate-600" />
+                    <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      No Approved Estimates Yet
+                    </div>
+                    <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
+                      Estimate scopes and deliverable hours will appear here once authorized and approved by management.
+                    </p>
+                  </div>
+                );
+              }
+
+              return visiblePackages.map((pkg) => {
+                const pkgVersions = versions
+                  .filter((v) => v.scope_package_id === pkg.id)
+                  .filter((v) => !isMember || v.status === 'approved')
+                  .sort((a, b) => b.version_number - a.version_number);
+
+                return (
                 <div
                   key={pkg.id}
                   className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl p-3 space-y-3 shadow-xs"
@@ -654,7 +680,8 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                   </div>
                 </div>
               );
-            })}
+            });
+          })()}
           </>
         ) : (
           /* Work Orders Tab */

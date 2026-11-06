@@ -27,6 +27,18 @@ export function canGenerateWorkOrder(role: UserRole): boolean {
   return role === 'super_admin' || role === 'admin';
 }
 
+export function isEstimateVisibleToViewer(
+  estimateStatus: string,
+  viewerRole: UserRole
+): boolean {
+  // Members can only see estimates after approval from the admin
+  if (viewerRole === 'member') {
+    return estimateStatus === 'approved';
+  }
+  // Admins and Super Admins can see all statuses (draft, pending, approved, etc.)
+  return true;
+}
+
 export function filterTeamRosterForViewer<T extends { role: UserRole }>(
   members: T[],
   viewerRole: UserRole
@@ -166,5 +178,52 @@ describe('Role & Permission Authorization Boundary Tests', () => {
     const superAdminRoster = filterTeamRosterForViewer(mockRoster, 'super_admin');
     expect(superAdminRoster.length).toBe(3);
     expect(superAdminRoster.some((m) => m.role === 'super_admin')).toBe(true);
+  });
+
+  it('restricts estimate visibility for Members until after Admin approval', () => {
+    // Unapproved estimates must be hidden from Members
+    expect(isEstimateVisibleToViewer('draft', 'member')).toBe(false);
+    expect(isEstimateVisibleToViewer('pending', 'member')).toBe(false);
+    expect(isEstimateVisibleToViewer('revision_requested', 'member')).toBe(false);
+
+    // Only approved estimates are visible to Members
+    expect(isEstimateVisibleToViewer('approved', 'member')).toBe(true);
+
+    // Admins and Super Admins can see all statuses
+    expect(isEstimateVisibleToViewer('draft', 'admin')).toBe(true);
+    expect(isEstimateVisibleToViewer('pending', 'admin')).toBe(true);
+    expect(isEstimateVisibleToViewer('approved', 'admin')).toBe(true);
+    expect(isEstimateVisibleToViewer('draft', 'super_admin')).toBe(true);
+    expect(isEstimateVisibleToViewer('pending', 'super_admin')).toBe(true);
+    expect(isEstimateVisibleToViewer('approved', 'super_admin')).toBe(true);
+  });
+
+  it('ensures Member view contains ONLY scopes and hours with zero money/USD/BDT', () => {
+    const approvedScopeVersion = {
+      id: 'ver-approved-1',
+      version_number: 1,
+      status: 'approved',
+      total_hours_snapshot: 145.0,
+      total_usd_snapshot: 12325.0,
+      total_bdt_snapshot: 1479000.0,
+      items: [
+        { title: 'Database Architecture & Security Configuration', hours: 40.0 },
+        { title: 'Core Workspace Workflows & API Implementation', hours: 65.0 },
+        { title: 'Automated Testing & Client QA Signoff', hours: 40.0 },
+      ],
+    };
+
+    // Member view projection:
+    const memberView = sanitizeFinancialsForRole(approvedScopeVersion, 'member');
+    expect(isEstimateVisibleToViewer(memberView.status, 'member')).toBe(true);
+    expect(memberView.total_hours_snapshot).toBe(145.0);
+    expect(memberView.items).toHaveLength(3);
+    expect(memberView.items[0].hours).toBe(40.0);
+
+    // Strictly NO money, USD, or BDT fields visible to member
+    expect(memberView.total_usd_snapshot).toBeUndefined();
+    expect(memberView.total_bdt_snapshot).toBeUndefined();
+    expect((memberView as any).client_rate_usd_per_hour).toBeUndefined();
+    expect((memberView as any).client_rate_bdt_per_hour).toBeUndefined();
   });
 });

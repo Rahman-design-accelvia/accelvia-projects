@@ -88,8 +88,8 @@ export const LeftPanelClients: React.FC<LeftPanelClientsProps> = ({
 
   // Filter projects by search
   const filteredProjects = projects.filter((p) => {
-    // For members, only assigned projects (proj-1 in seed)
-    if (isMember && p.id !== 'proj-1') return false;
+    // Members see all active projects (hide archived)
+    if (isMember && p.status === 'archived') return false;
     return (
       p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.description_internal?.toLowerCase().includes(searchTerm.toLowerCase())

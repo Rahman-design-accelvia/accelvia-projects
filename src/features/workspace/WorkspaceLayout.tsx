@@ -1,7 +1,7 @@
 // src/features/workspace/WorkspaceLayout.tsx
 // Core Three-Panel Workspace Layout with live state management
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
 import { LeftPanelClients } from './LeftPanelClients';
@@ -89,17 +89,121 @@ export const WorkspaceLayout: React.FC = () => {
   const [isCompanySettingsModalOpen, setIsCompanySettingsModalOpen] = useState(false);
   const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
 
-  // Primary state stores
-  const [clients, setClients] = useState<Client[]>(SEED_CLIENTS);
-  const [projects, setProjects] = useState<Project[]>(SEED_PROJECTS);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>('proj-1');
+  // Primary state store storage keys
+  const STORAGE_KEY_CLIENTS = 'accelvia_clients_v2';
+  const STORAGE_KEY_PROJECTS = 'accelvia_projects_v2';
+  const STORAGE_KEY_FINANCIALS = 'accelvia_financials_v2';
+  const STORAGE_KEY_PACKAGES = 'accelvia_packages_v2';
+  const STORAGE_KEY_VERSIONS = 'accelvia_versions_v2';
+  const STORAGE_KEY_WORK_ORDERS = 'accelvia_work_orders_v2';
+  const STORAGE_KEY_MESSAGES = 'accelvia_messages_v2';
+  const STORAGE_KEY_AUDIT = 'accelvia_audit_events_v2';
 
-  const [financials, setFinancials] = useState<Record<string, ProjectFinancialSettings>>(SEED_FINANCIALS);
-  const [packages, setPackages] = useState<ScopePackage[]>(SEED_PACKAGES);
-  const [versions, setVersions] = useState<ScopeVersion[]>(SEED_VERSIONS);
-  const [workOrders, setWorkOrders] = useState<WorkOrder[]>(SEED_WORK_ORDERS);
-  const [messages, setMessages] = useState<SafeMessage[]>(SEED_MESSAGES);
-  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>(SEED_AUDIT_EVENTS);
+  // Primary state stores with persistent browser storage
+  const [clients, setClients] = useState<Client[]>(() => {
+    if (typeof window === 'undefined') return SEED_CLIENTS;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_CLIENTS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return SEED_CLIENTS;
+  });
+
+  const [projects, setProjects] = useState<Project[]>(() => {
+    if (typeof window === 'undefined') return SEED_PROJECTS;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_PROJECTS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return SEED_PROJECTS;
+  });
+
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'proj-1';
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_PROJECTS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0].id;
+      }
+    } catch {}
+    return 'proj-1';
+  });
+
+  const [financials, setFinancials] = useState<Record<string, ProjectFinancialSettings>>(() => {
+    if (typeof window === 'undefined') return SEED_FINANCIALS;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_FINANCIALS);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return SEED_FINANCIALS;
+  });
+
+  const [packages, setPackages] = useState<ScopePackage[]>(() => {
+    if (typeof window === 'undefined') return SEED_PACKAGES;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_PACKAGES);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return SEED_PACKAGES;
+  });
+
+  const [versions, setVersions] = useState<ScopeVersion[]>(() => {
+    if (typeof window === 'undefined') return SEED_VERSIONS;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_VERSIONS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return SEED_VERSIONS;
+  });
+
+  const [workOrders, setWorkOrders] = useState<WorkOrder[]>(() => {
+    if (typeof window === 'undefined') return SEED_WORK_ORDERS;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_WORK_ORDERS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return SEED_WORK_ORDERS;
+  });
+
+  const [messages, setMessages] = useState<SafeMessage[]>(() => {
+    if (typeof window === 'undefined') return SEED_MESSAGES;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_MESSAGES);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return SEED_MESSAGES;
+  });
+
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>(() => {
+    if (typeof window === 'undefined') return SEED_AUDIT_EVENTS;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_AUDIT);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return SEED_AUDIT_EVENTS;
+  });
 
   // Modals state
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
@@ -161,6 +265,87 @@ export const WorkspaceLayout: React.FC = () => {
     const timer = setInterval(() => setCurrentTimeInstant(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Synchronize state across browser sessions and persist to localStorage
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY_CLIENTS, JSON.stringify(clients)); } catch {}
+  }, [clients]);
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(projects)); } catch {}
+  }, [projects]);
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY_FINANCIALS, JSON.stringify(financials)); } catch {}
+  }, [financials]);
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY_PACKAGES, JSON.stringify(packages)); } catch {}
+  }, [packages]);
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY_VERSIONS, JSON.stringify(versions)); } catch {}
+  }, [versions]);
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY_WORK_ORDERS, JSON.stringify(workOrders)); } catch {}
+  }, [workOrders]);
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(messages)); } catch {}
+  }, [messages]);
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY_AUDIT, JSON.stringify(auditEvents)); } catch {}
+  }, [auditEvents]);
+
+  // Cross-tab real-time sync & notifications receiver
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('BroadcastChannel' in window)) return;
+    const channel = new BroadcastChannel('accelvia_sync_channel');
+
+    channel.onmessage = (event) => {
+      const data = event.data;
+      if (!data || !data.type) return;
+
+      if (data.type === 'NEW_MESSAGE' && data.message) {
+        if (data.authorId !== currentUser.user_id) {
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === data.message.id)) return prev;
+            return [...prev, data.message];
+          });
+
+          const isMentioned = data.mentionedMemberIds?.includes(currentUser.user_id) ||
+            (data.isManagementMentioned && isSuperAdmin);
+
+          if (isMentioned) {
+            notify({
+              title: `🔔 Mention Alert: ${data.authorName} mentioned you`,
+              body: data.snippet?.length > 120 ? `"${data.snippet.slice(0, 117)}..."` : `"${data.snippet}"`,
+              category: 'conversation',
+              priority: 'high',
+              project_id: data.projectId,
+              project_name: data.projectName,
+              author_name: data.authorName,
+            });
+          } else {
+            notify({
+              title: `💬 New Message (${data.authorName})`,
+              body: data.snippet?.length > 120 ? `${data.snippet.slice(0, 117)}...` : data.snippet,
+              category: 'conversation',
+              project_id: data.projectId,
+              project_name: data.projectName,
+              author_name: data.authorName,
+            });
+          }
+        }
+      }
+    };
+
+    return () => {
+      channel.close();
+    };
+  }, [currentUser.user_id, isSuperAdmin, notify]);
 
   const topDualTime = formatDualTime(currentTimeInstant, activeProject?.timezone || 'Asia/Dhaka');
 
@@ -299,22 +484,14 @@ export const WorkspaceLayout: React.FC = () => {
     };
     setMessages((prev) => [...prev, newMsg]);
 
-    // Dispatch real-time web push notification for conversation message
+    // Extract message snippet for push notifications
     const rawSnippet = extractMessageSnippet(contentJson);
     let snippet = rawSnippet;
     if ((!snippet || snippet === 'New message in conversation thread') && voiceNote) {
       snippet = `🎙️ Voice Note (${Math.round(voiceNote.duration_seconds)}s)${voiceNote.transcript ? ': "' + voiceNote.transcript + '"' : ''}`;
     }
-    notify({
-      title: `💬 New Message (${currentUser.display_name})`,
-      body: snippet.length > 120 ? `${snippet.slice(0, 117)}...` : snippet,
-      category: 'conversation',
-      project_id: activeProject?.id,
-      project_name: activeProject?.name,
-      author_name: currentUser.display_name,
-    });
 
-    // Google L6 Standard @mention scanner: Alert targeted users when mentioned
+    // Google L6 Standard @mention scanner: Target mentioned users
     const mentionedMembers = (teamMembers || []).filter((m) => {
       if (m.user_id === currentUser.user_id) return false;
       const pattern = new RegExp(`@${m.display_name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i');
@@ -322,22 +499,26 @@ export const WorkspaceLayout: React.FC = () => {
     });
 
     const isManagementMentioned = /@Management\b/i.test(snippet) && !isSuperAdmin;
+    const authorDisplayName = isSuperAdmin ? 'Management' : currentUser.display_name;
 
-    if (mentionedMembers.length > 0 || isManagementMentioned) {
-      const targetNames = [
-        ...mentionedMembers.map((m) => m.display_name),
-        ...(isManagementMentioned ? ['Management'] : []),
-      ].join(', ');
-
-      notify({
-        title: `🔔 Mention Alert: ${currentUser.display_name} mentioned ${targetNames}`,
-        body: snippet.length > 120 ? `"${snippet.slice(0, 117)}..."` : `"${snippet}"`,
-        category: 'conversation',
-        project_id: activeProject?.id,
-        project_name: activeProject?.name,
-        author_name: currentUser.display_name,
-      });
-    }
+    // Cross-tab / cross-device broadcast to alert recipients (the sender does not receive a self-toast)
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        const channel = new BroadcastChannel('accelvia_sync_channel');
+        channel.postMessage({
+          type: 'NEW_MESSAGE',
+          message: newMsg,
+          authorId: currentUser.user_id,
+          authorName: authorDisplayName,
+          snippet,
+          projectId: activeProject?.id,
+          projectName: activeProject?.name,
+          mentionedMemberIds: mentionedMembers.map((m) => m.user_id),
+          isManagementMentioned,
+        });
+        channel.close();
+      }
+    } catch {}
   };
 
   const handleEditMessage = (messageId: string, newText: string) => {

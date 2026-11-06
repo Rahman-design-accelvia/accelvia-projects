@@ -232,6 +232,17 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
           </div>
         ) : (
           messages.map((msg) => {
+            // Strict Role Rule: Members can ONLY see the estimate scopes and hours AFTER approval from the admin
+            if (isMember) {
+              const estVersionId = msg.estimate_version_id || msg.estimate_card?.version_id;
+              if (estVersionId) {
+                const targetVersion = versions.find((v) => v.id === estVersionId) || msg.estimate_card;
+                if (targetVersion && targetVersion.status !== 'approved') {
+                  return null;
+                }
+              }
+            }
+
             const isAuthorSuperAdmin = msg.author_is_management;
             // Super Admin identity masking: if author is SA and viewer is not SA, show 'Management'
             const displayedAuthor = (!isSuperAdmin && isAuthorSuperAdmin) ? 'Management' : msg.author_name;
