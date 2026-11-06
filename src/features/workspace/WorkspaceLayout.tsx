@@ -1949,8 +1949,8 @@ export const WorkspaceLayout: React.FC = () => {
         />
       )}
 
-      {/* Super Admin Team & Role Management Modal */}
-      {isSuperAdmin && (
+      {/* Team & Role Management Modal (Super Admin & Admin) */}
+      {(isSuperAdmin || isAdmin) && (
         <TeamManagementModal
           isOpen={isTeamModalOpen}
           onClose={() => setIsTeamModalOpen(false)}
