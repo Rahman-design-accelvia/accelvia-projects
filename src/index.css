@@ -238,6 +238,14 @@
   .pr-safe {
     padding-right: env(safe-area-inset-right, 0px);
   }
+  .h-screen-dvh {
+    height: 100vh;
+    height: 100dvh;
+  }
+  .min-h-screen-dvh {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
@@ -248,6 +256,16 @@
   .tap-highlight-transparent {
     -webkit-tap-highlight-color: transparent;
   }
+}
+
+/* Standalone PWA & Touch ergonomics */
+html, body, #root {
+  min-height: 100dvh;
+}
+
+body {
+  overscroll-behavior-y: none;
+  touch-action: manipulation;
 }
 
 /* Ensure smooth native momentum scroll on iOS */

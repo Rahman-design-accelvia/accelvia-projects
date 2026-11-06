@@ -1,34 +1,92 @@
 // src/sw.ts
-// Service Worker for Background Web Push & Notification Click Handling
+// Production Service Worker for Accelvia Mobile PWA:
+// - App Shell Asset Caching & Offline Resilience
+// - Native Web Push Notifications (Android & iOS 16.4+ standalone)
+// - Click-to-Focus Window Navigation & Vibration Patterns
 
-const sw = self as unknown as {
-  addEventListener: (type: string, listener: (event: any) => void) => void;
-  skipWaiting: () => Promise<void>;
-  clients: {
-    claim: () => Promise<void>;
-    matchAll: (options?: any) => Promise<any[]>;
-    openWindow?: (url: string) => Promise<any>;
-  };
-  registration: {
-    showNotification: (title: string, options?: any) => Promise<void>;
-  };
-};
+const CACHE_NAME = 'accelvia-pwa-v1';
+const STATIC_ASSETS = [
+  '/',
+  '/index.html',
+  '/manifest.webmanifest',
+  '/favicon.svg',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/apple-touch-icon.png',
+];
 
-sw.addEventListener('install', () => {
-  sw.skipWaiting();
+const sw = self as any;
+
+// 1. Install Event: Pre-cache core application shell
+sw.addEventListener('install', (event: any) => {
+  event.waitUntil(
+    caches
+      .open(CACHE_NAME)
+      .then((cache) => cache.addAll(STATIC_ASSETS))
+      .catch((err) => {
+        console.warn('SW pre-cache warning:', err);
+      })
+      .then(() => sw.skipWaiting())
+  );
 });
 
+// 2. Activate Event: Clean up stale caches & claim clients immediately
 sw.addEventListener('activate', (event: any) => {
-  event.waitUntil(sw.clients.claim());
+  event.waitUntil(
+    caches
+      .keys()
+      .then((cacheNames) =>
+        Promise.all(
+          cacheNames.map((name) => {
+            if (name !== CACHE_NAME) {
+              return caches.delete(name);
+            }
+          })
+        )
+      )
+      .then(() => sw.clients.claim())
+  );
 });
 
+// 3. Fetch Event: Stale-While-Revalidate caching for instant mobile loads
+sw.addEventListener('fetch', (event: any) => {
+  const request = event.request;
+
+  // Only cache GET requests
+  if (request.method !== 'GET' || !request.url.startsWith('http')) {
+    return;
+  }
+
+  // Bypass cache for Supabase or external APIs
+  if (request.url.includes('supabase.co') || request.url.includes('/api/')) {
+    return;
+  }
+
+  event.respondWith(
+    caches.match(request).then((cachedResponse) => {
+      const fetchPromise = fetch(request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
+          }
+          return networkResponse;
+        })
+        .catch(() => cachedResponse);
+
+      return cachedResponse || fetchPromise;
+    })
+  );
+});
+
+// 4. Notification Click Event: Focus existing window or open app
 sw.addEventListener('notificationclick', (event: any) => {
   event.notification.close();
 
   event.waitUntil(
     sw.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList: any[]) => {
       for (const client of clientList) {
-        if ('focus' in client) {
+        if ('focus' in client && 'url' in client) {
           return client.focus();
         }
       }
@@ -39,16 +97,19 @@ sw.addEventListener('notificationclick', (event: any) => {
   );
 });
 
+// 5. Push Notification Event: Native Mobile Push with Sound & Vibration
 sw.addEventListener('push', (event: any) => {
   if (!event.data) return;
 
   try {
     const data = event.data.json();
     const title = data.title || 'Accelvia Notification';
-    const options = {
+    const options: Record<string, any> = {
       body: data.body || '',
-      icon: data.icon || '/favicon.ico',
-      badge: data.badge || '/favicon.ico',
+      icon: data.icon || '/icon-192.png',
+      badge: data.badge || '/icon-192.png',
+      vibrate: [200, 100, 200],
+      tag: data.tag || 'accelvia-alert',
       data: data.data || {},
     };
     event.waitUntil(sw.registration.showNotification(title, options));
@@ -57,6 +118,9 @@ sw.addEventListener('push', (event: any) => {
     event.waitUntil(
       sw.registration.showNotification('Accelvia Notification', {
         body: text,
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        vibrate: [200, 100, 200],
       })
     );
   }

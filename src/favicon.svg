@@ -1,0 +1,33 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#090d16" />
+        <stop offset="100%" stop-color="#020617" />
+      </linearGradient>
+      <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#34d399" />
+        <stop offset="50%" stop-color="#10b981" />
+        <stop offset="100%" stop-color="#0d9488" />
+      </linearGradient>
+      <linearGradient id="glowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#10b981" stop-opacity="0.35" />
+        <stop offset="100%" stop-color="#0d9488" stop-opacity="0" />
+      </linearGradient>
+    </defs>
+    <!-- Background rounded squircle -->
+    <rect width="128" height="128" rx="28.16" fill="url(#bgGrad)" />
+    <rect width="128" height="128" rx="28.16" fill="none" stroke="#1e293b" stroke-width="1.92" />
+    
+    <!-- Ambient glow circle -->
+    <circle cx="64" cy="64" r="44.8" fill="url(#glowGrad)" />
+
+    <!-- Modern Accelvia 'A' geometric emblem -->
+    <g transform="translate(12.8, 12.8)">
+      <!-- Left diagonal beam -->
+      <path d="M 51.2 15.36 L 66.56 15.36 L 92.16000000000001 87.04 L 73.728 87.04 L 58.367999999999995 46.080000000000005 L 44.032000000000004 46.080000000000005 L 28.672000000000004 87.04 L 10.240000000000002 87.04 Z" fill="url(#brandGrad)" />
+      <!-- High-tech cross connector -->
+      <path d="M 34.816 59.391999999999996 L 67.584 59.391999999999996 L 62.464 69.632 L 39.93600000000001 69.632 Z" fill="#6ee7b7" />
+      <!-- Center pulse jewel -->
+      <circle cx="51.2" cy="36.864" r="6.144" fill="#ffffff" />
+    </g>
+  </svg>

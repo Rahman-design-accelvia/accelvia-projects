@@ -53,7 +53,8 @@ import {
   LogOut,
   Users,
   CheckCircle2,
-  Palette
+  Palette,
+  Smartphone
 } from 'lucide-react';
 import { Sun, Moon } from '../../components/ThemeIcons';
 import { BellIcon, BellRingIcon } from '../../components/NotificationIcons';
@@ -68,6 +69,7 @@ import { Calendar as CalendarIcon } from 'lucide-react';
 import { useOrganization } from '../organization/OrganizationContext';
 import { CompanySettingsModal } from '../organization/CompanySettingsModal';
 import { ThemeCustomizerModal } from '../theme/ThemeCustomizerModal';
+import { InstallAppBanner } from '../../components/InstallAppBanner';
 
 export const WorkspaceLayout: React.FC = () => {
   const { currentRole, currentUser, isSuperAdmin, isAdmin, isMember, isAuthenticated, logout, pendingRegistrations, teamMembers, canViewMoney } = useAuth();
@@ -1345,7 +1347,7 @@ export const WorkspaceLayout: React.FC = () => {
   }
 
   return (
-    <div className="h-screen w-screen flex flex-col theme-surface-canvas overflow-hidden text-slate-900 dark:text-slate-100 transition-colors">
+    <div className="h-screen-dvh w-screen flex flex-col theme-surface-canvas overflow-hidden text-slate-900 dark:text-slate-100 transition-colors">
       {/* Top Application Bar */}
       <header className="h-14 theme-surface-header border-b flex items-center justify-between px-3 sm:px-4 z-20 shrink-0 shadow-xs">
         {/* Brand & Left Navigation Controls */}
@@ -1643,6 +1645,25 @@ export const WorkspaceLayout: React.FC = () => {
                     </span>
                   </button>
                 )}
+
+                {/* Install Mobile PWA App Action */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    window.dispatchEvent(new CustomEvent('accelvia:show-install-prompt'));
+                  }}
+                  className="w-full text-left py-1.5 px-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-950/80 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-semibold flex items-center justify-between transition cursor-pointer"
+                  title="Install Accelvia on iOS or Android"
+                >
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="w-3.5 h-3.5 text-emerald-600 dark:text-teal-400" />
+                    <span>Install Mobile App</span>
+                  </div>
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200 font-bold">
+                    PWA
+                  </span>
+                </button>
 
                 {/* Sign Out Button */}
                 <button
@@ -2066,6 +2087,9 @@ export const WorkspaceLayout: React.FC = () => {
         onNavigateToScope={() => setMobileTab('scope')}
         onNavigateToChat={() => setMobileTab('chat')}
       />
+
+      {/* PWA In-App Install Prompt Banner & iOS Safari Setup Guide */}
+      <InstallAppBanner />
     </div>
   );
 };

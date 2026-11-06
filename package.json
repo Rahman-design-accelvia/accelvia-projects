@@ -33,7 +33,9 @@
     "tailwind-merge": "^3.0.2"
   },
   "devDependencies": {
+    "@parcel/packager-raw-url": "^2.16.4",
     "@parcel/transformer-sass": "^2.14.0",
+    "@parcel/transformer-webmanifest": "^2.16.4",
     "@types/dompurify": "^3.2.0",
     "@types/node": "^22.13.10",
     "@types/pg": "^8.23.1",
