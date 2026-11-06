@@ -146,6 +146,7 @@ export interface MessageAttachment {
 export interface SafeMessage {
   id: string;
   conversation_id: string;
+  project_id?: string;
   author_id: string | null; // Null if super_admin for non-SA callers
   author_name: string;      // 'Management' if super_admin
   author_is_management: boolean;

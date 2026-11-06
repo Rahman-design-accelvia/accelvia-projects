@@ -1,6 +1,7 @@
 // src/features/workspace/estimate-workorder-lifecycle.test.ts
 import { describe, it, expect } from 'vitest';
-import { ScopeVersion, WorkOrder, ScopePackage } from '../../types';
+import { ScopeVersion, WorkOrder, ScopePackage, SafeMessage } from '../../types';
+import { filterMessagesForProject } from './WorkspaceLayout';
 
 describe('Estimate and Work Order Lifecycle & Immutability Rules', () => {
   it('allows editing an unapproved estimate (draft)', () => {
@@ -164,5 +165,71 @@ describe('Estimate and Work Order Lifecycle & Immutability Rules', () => {
     expect(woItems[0].title).toBe('Single task');
     expect(woItems[1].title).toBe('Core Deliverables & System Integration');
     expect(woItems[2].title).toBe('Automated Verification & Unit Testing');
+  });
+
+  it('isolates conversation messages strictly per project so new projects have clean independent chat', () => {
+    const mockMessages: SafeMessage[] = [
+      {
+        id: 'msg-proj1-1',
+        conversation_id: 'conv-proj-1',
+        project_id: 'proj-1',
+        author_id: 'user-1',
+        author_name: 'Dev Alex',
+        author_is_management: false,
+        content_json: { type: 'doc' },
+        event_at: '2026-11-06T10:00:00Z',
+        created_at: '2026-11-06T10:00:00Z',
+        updated_at: '2026-11-06T10:00:00Z',
+        is_edited: false,
+        is_deleted: false,
+        attachments: [],
+      },
+      {
+        id: 'msg-proj1-legacy',
+        conversation_id: 'conv-1',
+        author_id: 'user-2',
+        author_name: 'Sarah Connor',
+        author_is_management: false,
+        content_json: { type: 'doc' },
+        event_at: '2026-11-06T10:05:00Z',
+        created_at: '2026-11-06T10:05:00Z',
+        updated_at: '2026-11-06T10:05:00Z',
+        is_edited: false,
+        is_deleted: false,
+        attachments: [],
+      },
+      {
+        id: 'msg-proj2-1',
+        conversation_id: 'conv-proj-2',
+        project_id: 'proj-2',
+        author_id: 'user-1',
+        author_name: 'Dev Alex',
+        author_is_management: false,
+        content_json: { type: 'doc' },
+        event_at: '2026-11-06T11:00:00Z',
+        created_at: '2026-11-06T11:00:00Z',
+        updated_at: '2026-11-06T11:00:00Z',
+        is_edited: false,
+        is_deleted: false,
+        attachments: [],
+      },
+    ];
+
+    // Project 1 gets only its messages
+    const proj1Messages = filterMessagesForProject(mockMessages, 'proj-1');
+    expect(proj1Messages).toHaveLength(2);
+    expect(proj1Messages.map((m) => m.id)).toEqual(['msg-proj1-1', 'msg-proj1-legacy']);
+
+    // Project 2 gets only Project 2's message
+    const proj2Messages = filterMessagesForProject(mockMessages, 'proj-2');
+    expect(proj2Messages).toHaveLength(1);
+    expect(proj2Messages[0].id).toBe('msg-proj2-1');
+
+    // A brand new project has 0 messages (completely clean independent conversation)
+    const newProjMessages = filterMessagesForProject(mockMessages, 'proj-brand-new-999');
+    expect(newProjMessages).toHaveLength(0);
+
+    // Empty project id returns 0 messages
+    expect(filterMessagesForProject(mockMessages, '')).toEqual([]);
   });
 });

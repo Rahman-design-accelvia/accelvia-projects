@@ -1,7 +1,7 @@
 // src/features/workspace/WorkspaceLayout.tsx
 // Core Three-Panel Workspace Layout with live state management
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
 import { LeftPanelClients } from './LeftPanelClients';
@@ -70,6 +70,34 @@ import { useOrganization } from '../organization/OrganizationContext';
 import { CompanySettingsModal } from '../organization/CompanySettingsModal';
 import { ThemeCustomizerModal } from '../theme/ThemeCustomizerModal';
 import { InstallAppBanner } from '../../components/InstallAppBanner';
+
+/**
+ * Isolates conversation messages strictly to a specific project.
+ * Ensures newly created projects start with a clean thread and messages
+ * from other projects never leak across clients or projects.
+ */
+export function filterMessagesForProject(
+  messages: SafeMessage[],
+  targetProjectId: string
+): SafeMessage[] {
+  if (!targetProjectId) return [];
+  const targetConvId = `conv-${targetProjectId}`;
+  return messages.filter((m) => {
+    // 1. Direct project_id association
+    if (m.project_id) {
+      return m.project_id === targetProjectId;
+    }
+    // 2. Matching conversation_id (conv-{projectId})
+    if (m.conversation_id === targetConvId) {
+      return true;
+    }
+    // 3. Fallback for legacy seed messages in the default proj-1 project
+    if (targetProjectId === 'proj-1' && m.conversation_id === 'conv-1') {
+      return true;
+    }
+    return false;
+  });
+}
 
 export const WorkspaceLayout: React.FC = () => {
   const { currentRole, currentUser, isSuperAdmin, isAdmin, isMember, isAuthenticated, logout, pendingRegistrations, teamMembers, canViewMoney } = useAuth();
@@ -245,6 +273,9 @@ export const WorkspaceLayout: React.FC = () => {
     activePackages.some((pkg) => pkg.id === v.scope_package_id)
   );
   const activeWorkOrders = activeProject ? workOrders.filter((wo) => wo.project_id === activeProject.id) : [];
+  const activeMessages = useMemo(() => {
+    return filterMessagesForProject(messages, activeProject?.id || '');
+  }, [messages, activeProject?.id]);
 
   // Authoritative approved hours for mobile badge
   const packagesWithVersions = activePackages.map((pkg) => ({
@@ -458,9 +489,11 @@ export const WorkspaceLayout: React.FC = () => {
     attachments: File[],
     voiceNote?: VoiceNoteData | null
   ) => {
+    const activeConvId = activeProject ? `conv-${activeProject.id}` : 'conv-1';
     const newMsg: SafeMessage = {
       id: `msg-${Date.now()}`,
-      conversation_id: 'conv-1',
+      conversation_id: activeConvId,
+      project_id: activeProject?.id,
       author_id: currentUser.user_id,
       author_name: currentUser.display_name,
       author_is_management: isSuperAdmin,
@@ -475,7 +508,7 @@ export const WorkspaceLayout: React.FC = () => {
         id: `att-${Date.now()}-${i}`,
         message_id: `msg-${Date.now()}`,
         storage_bucket: 'attachments',
-        storage_path: `conv-1/${f.name}`,
+        storage_path: `${activeConvId}/${f.name}`,
         original_filename: f.name,
         mime_type: f.type,
         size_bytes: f.size,
@@ -780,9 +813,11 @@ export const WorkspaceLayout: React.FC = () => {
       const verSnapshot = targetVer || versions.find((v) => v.id === versionId);
       if (verSnapshot) {
         const hoursFormatted = (verSnapshot.total_hours_snapshot || 0).toFixed(2);
+        const activeConvId = activeProject ? `conv-${activeProject.id}` : 'conv-1';
         const newMsg: SafeMessage = {
           id: `msg-${Date.now()}`,
-          conversation_id: 'conv-1',
+          conversation_id: activeConvId,
+          project_id: activeProject?.id,
           author_id: currentUser.user_id,
           author_name: currentUser.display_name,
           author_is_management: isSuperAdmin,
@@ -1086,9 +1121,11 @@ export const WorkspaceLayout: React.FC = () => {
     // Post a work_order_card message to the conversation thread
     const pkg = packages.find((p) => p.id === ver.scope_package_id);
     const totalHoursFormatted = ver.total_hours_snapshot;
+    const activeConvId = activeProject ? `conv-${activeProject.id}` : 'conv-1';
     const woConversationMsg: SafeMessage = {
       id: `msg-${Date.now()}-wo`,
-      conversation_id: 'conv-1',
+      conversation_id: activeConvId,
+      project_id: activeProject?.id,
       author_id: currentUser.user_id,
       author_name: currentUser.display_name,
       author_is_management: isSuperAdmin,
@@ -1923,7 +1960,7 @@ export const WorkspaceLayout: React.FC = () => {
         <RightPanelConversation
           project={activeProject}
           client={activeClient}
-          messages={messages}
+          messages={activeMessages}
           versions={versions}
           teamMembers={teamMembers}
           onSendMessage={handleSendMessage}
@@ -1981,7 +2018,7 @@ export const WorkspaceLayout: React.FC = () => {
           <RightPanelConversation
             project={activeProject}
             client={activeClient}
-            messages={messages}
+            messages={activeMessages}
             versions={versions}
             teamMembers={teamMembers}
             onSendMessage={handleSendMessage}
@@ -2057,9 +2094,9 @@ export const WorkspaceLayout: React.FC = () => {
         >
           <div className="relative">
             <MessageSquare className={`w-5 h-5 ${mobileTab === 'chat' ? 'text-emerald-600 dark:text-teal-400 stroke-[2.5]' : ''}`} />
-            {messages.length > 0 && (
+            {activeMessages.length > 0 && (
               <span className="absolute -top-1 -right-2.5 bg-emerald-100 dark:bg-teal-950 text-emerald-800 dark:text-teal-400 text-[10px] font-mono px-1 rounded-full border border-emerald-300 dark:border-teal-800">
-                {messages.length}
+                {activeMessages.length}
               </span>
             )}
           </div>
