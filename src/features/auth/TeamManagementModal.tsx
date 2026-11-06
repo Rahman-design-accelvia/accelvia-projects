@@ -22,7 +22,9 @@ import {
   CheckCheck,
   XCircle,
   Shield,
-  FileText
+  FileText,
+  Lock,
+  ShieldCheck
 } from 'lucide-react';
 
 interface TeamManagementModalProps {
@@ -320,7 +322,7 @@ Your account has been activated by the Super Admin:
                     <th className="py-2.5 px-3">Team Member</th>
                     <th className="py-2.5 px-3">Email / Gmail</th>
                     <th className="py-2.5 px-3">Assigned Role</th>
-                    <th className="py-2.5 px-3">Initial Password</th>
+                    <th className="py-2.5 px-3">Password & Security</th>
                     <th className="py-2.5 px-3 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -349,19 +351,28 @@ Your account has been activated by the Super Admin:
                         )}
                       </td>
                       <td className="py-2.5 px-3">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono text-[11px] text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
-                            {member.password || 'Password123!'}
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700/80 flex items-center gap-1.5">
+                            <Lock className="w-3 h-3 text-slate-400 dark:text-slate-500" />
+                            <span>••••••••</span>
                           </span>
+                          <span className="text-[10px] text-emerald-600 dark:text-teal-400 font-semibold flex items-center gap-1">
+                            <ShieldCheck className="w-3 h-3" />
+                            <span>Protected</span>
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
                           <button
                             type="button"
                             onClick={() => {
-                              copyCredentialsText(member);
+                              navigator.clipboard.writeText(member.email);
                               setCopiedIndex(idx);
-                              setTimeout(() => setCopiedIndex(null), 2500);
+                              setTimeout(() => setCopiedIndex(null), 2000);
                             }}
                             className="p-1 rounded text-slate-400 hover:text-emerald-600 transition"
-                            title="Copy login details"
+                            title="Copy email address"
                           >
                             {copiedIndex === idx ? (
                               <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -369,21 +380,19 @@ Your account has been activated by the Super Admin:
                               <Copy className="w-3.5 h-3.5" />
                             )}
                           </button>
+                          {member.role !== 'super_admin' ? (
+                            <button
+                              type="button"
+                              onClick={() => removeTeamMember(member.user_id)}
+                              className="p-1 rounded text-slate-400 hover:text-rose-600 transition"
+                              title="Remove user"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic">Root Authority</span>
+                          )}
                         </div>
-                      </td>
-                      <td className="py-2.5 px-3 text-right">
-                        {member.role !== 'super_admin' ? (
-                          <button
-                            type="button"
-                            onClick={() => removeTeamMember(member.user_id)}
-                            className="p-1 rounded text-slate-400 hover:text-rose-600 transition"
-                            title="Remove user"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        ) : (
-                          <span className="text-[10px] text-slate-400 italic">Root Authority</span>
-                        )}
                       </td>
                     </tr>
                   ))}

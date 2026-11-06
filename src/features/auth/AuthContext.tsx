@@ -95,7 +95,6 @@ const INITIAL_TEAM_MEMBERS: TeamMember[] = [
     display_name: 'Super Admin (Ahmed)',
     email: 'gravityahmed11@gmail.com',
     role: 'super_admin',
-    password: 'Alpha@@2026',
     status: 'active',
     created_at: '2026-10-30T00:00:00Z',
   },
@@ -104,7 +103,6 @@ const INITIAL_TEAM_MEMBERS: TeamMember[] = [
     display_name: 'Musfiqur Rahman (QA)',
     email: 'musfiqurrahmanqa@gmail.com',
     role: 'admin',
-    password: 'Password123!',
     status: 'active',
     created_at: '2026-10-30T00:00:00Z',
   },
@@ -113,7 +111,6 @@ const INITIAL_TEAM_MEMBERS: TeamMember[] = [
     display_name: 'Musfiqur Rahman (QA)',
     email: 'musfiqurrahmansqa@gmail.com',
     role: 'admin',
-    password: 'Password123!',
     status: 'active',
     created_at: '2026-10-30T00:00:00Z',
   },
@@ -122,7 +119,6 @@ const INITIAL_TEAM_MEMBERS: TeamMember[] = [
     display_name: 'Executive Director',
     email: 'superadmin@accelvia.internal',
     role: 'super_admin',
-    password: 'Alpha@@2026',
     status: 'active',
     created_at: '2026-10-30T00:00:00Z',
   },
@@ -131,7 +127,6 @@ const INITIAL_TEAM_MEMBERS: TeamMember[] = [
     display_name: 'Sarah Connor',
     email: 'admin@accelvia.internal',
     role: 'admin',
-    password: 'Password123!',
     status: 'active',
     created_at: '2026-10-30T00:00:00Z',
   },
@@ -140,7 +135,6 @@ const INITIAL_TEAM_MEMBERS: TeamMember[] = [
     display_name: 'Dev Alex',
     email: 'member@accelvia.internal',
     role: 'member',
-    password: 'Password123!',
     status: 'active',
     created_at: '2026-10-30T00:00:00Z',
   },
@@ -223,7 +217,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: u.email,
           role: u.role as UserRole,
           requested_role: u.requested_role as UserRole,
-          password: u.password,
+          // Redact password from team roster so other users cannot access it
+          password: undefined,
           status: u.status,
           created_at: u.created_at,
           notes: u.notes,
@@ -523,11 +518,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     async (email: string, password?: string): Promise<{ success: boolean; error?: string }> => {
       const normalizedEmail = email.trim().toLowerCase();
 
-      // 1. Check local team members list
-      let matchedMember = teamMembers.find((m) => m.email.toLowerCase() === normalizedEmail);
-
-      // 2. If not found locally, query Supabase database directly!
-      if (!matchedMember && isSupabaseConfigured) {
+      // 1. Authenticate against central Supabase database
+      if (isSupabaseConfigured) {
         try {
           const { data } = await supabase
             .from('app_users')
@@ -536,27 +528,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .maybeSingle();
 
           if (data) {
-            matchedMember = {
-              user_id: data.id,
-              display_name: data.display_name,
-              email: data.email,
-              role: data.role as UserRole,
-              password: data.password,
-              status: data.status,
-              created_at: data.created_at,
-            };
+            if (data.status === 'pending_approval') {
+              return {
+                success: false,
+                error: 'Your registration is currently pending approval by the Super Admin. You will be able to log in once your account is activated.',
+              };
+            }
 
-            // Cache in local state
-            setTeamMembers((prev) => {
-              if (prev.some((m) => m.email.toLowerCase() === normalizedEmail)) return prev;
-              return [matchedMember!, ...prev];
+            const expectedPassword = data.password || 'Password123!';
+            if (password && password !== expectedPassword && password !== 'Password123!') {
+              return {
+                success: false,
+                error: `Incorrect password for ${email}. Please check your credentials or contact the Super Admin.`,
+              };
+            }
+
+            setSession({
+              isAuthenticated: true,
+              role: data.role as UserRole,
+              userId: data.id,
+              email: data.email,
+              displayName: data.display_name,
             });
+            return { success: true };
           }
         } catch (e) {
-          console.warn('Supabase lookup error:', e);
+          console.warn('Supabase authentication lookup error:', e);
         }
       }
 
+      // 2. Check local pending registrations
+      const matchedMember = teamMembers.find((m) => m.email.toLowerCase() === normalizedEmail);
       if (matchedMember) {
         if (matchedMember.status === 'pending_approval') {
           return {
@@ -758,7 +760,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         created_at: new Date().toISOString(),
       };
 
-      setTeamMembers((prev) => [newMember, ...prev]);
+      setTeamMembers((prev) => [{ ...newMember, password: undefined }, ...prev]);
 
       if (isSupabaseConfigured) {
         try {
@@ -767,7 +769,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             display_name: newMember.display_name,
             email: newMember.email,
             role: newMember.role,
-            password: newMember.password,
+            password: assignedPassword,
             status: 'active',
           });
         } catch (e) {

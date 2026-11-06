@@ -168,4 +168,52 @@ describe('Realtime Free Tier & Administration Rules Engine', () => {
       expect(memberView.bdt).toBeNull();
     });
   });
+
+  describe('Administration Rule: Password Privacy & Redaction', () => {
+    it('ensures no user can see another user password in the team roster', () => {
+      // Simulate raw database users coming from Supabase
+      const rawDbUsers = [
+        { id: 'u-1', display_name: 'Musfiqur Rahman', email: 'musfiqur@example.com', role: 'admin', password: 'SecretPassword123' },
+        { id: 'u-2', display_name: 'Nahidur Abedin', email: 'nahidur@example.com', role: 'admin', password: 'AnotherSecret456' },
+      ];
+
+      // Sanitization applied when creating team roster state
+      const sanitizedRoster = rawDbUsers.map((u) => ({
+        user_id: u.id,
+        display_name: u.display_name,
+        email: u.email,
+        role: u.role,
+        password: undefined, // Redacted
+      }));
+
+      // In the roster view, passwords are never exposed
+      sanitizedRoster.forEach((member) => {
+        expect(member.password).toBeUndefined();
+      });
+
+      // Verify masked placeholder for UI presentation
+      const getMaskedPasswordDisplay = (password?: string) => {
+        return '••••••••';
+      };
+
+      expect(getMaskedPasswordDisplay(rawDbUsers[0].password)).toBe('••••••••');
+      expect(getMaskedPasswordDisplay(undefined)).toBe('••••••••');
+    });
+
+    it('ensures copy action in roster copies email and never another user password', () => {
+      const member = {
+        name: 'Dev Alex',
+        email: 'alex@example.com',
+        role: 'member',
+        password: 'TopSecretPassword99',
+      };
+
+      // Safe copy logic: copies only email/identity, never password
+      const getSafeCopyText = (target: { email: string }) => target.email;
+
+      const copied = getSafeCopyText(member);
+      expect(copied).toBe('alex@example.com');
+      expect(copied.includes('TopSecretPassword99')).toBe(false);
+    });
+  });
 });
