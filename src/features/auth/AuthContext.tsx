@@ -60,6 +60,7 @@ interface AuthContextType {
   teamMembers: TeamMember[];
   addTeamMember: (member: { display_name: string; email: string; role: UserRole; password?: string }) => Promise<TeamMember>;
   removeTeamMember: (userId: string) => Promise<void>;
+  updateUserPassword: (userId: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -217,8 +218,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: u.email,
           role: u.role as UserRole,
           requested_role: u.requested_role as UserRole,
-          // Redact password from team roster so other users cannot access it
-          password: undefined,
+          password: u.password,
           status: u.status,
           created_at: u.created_at,
           notes: u.notes,
@@ -301,6 +301,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const canManageUsers = isSuperAdmin || isAdmin;
   const canAccessAudit = isSuperAdmin;
   const canCorrectEventTime = isSuperAdmin;
+
+  // Role-gated team members: Super Admin sees all updated passwords; other roles have passwords redacted
+  const roleGatedTeamMembers = useMemo(() => {
+    if (isSuperAdmin) {
+      return teamMembers;
+    }
+    return teamMembers.map((m) => ({
+      ...m,
+      password: m.user_id === currentUser.user_id ? m.password : undefined,
+    }));
+  }, [teamMembers, isSuperAdmin, currentUser.user_id]);
 
   const setRole = useCallback((newRole: UserRole) => {
     if (newRole === 'super_admin' && superAdminProfile) {
@@ -795,6 +806,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  // Super Admin: Edit and update any user password
+  const updateUserPassword = useCallback(
+    async (userId: string, newPassword: string): Promise<{ success: boolean; error?: string }> => {
+      const trimmed = newPassword.trim();
+      if (!trimmed || trimmed.length < 6) {
+        return { success: false, error: 'Password must be at least 6 characters long.' };
+      }
+
+      // Update in Supabase central database
+      if (isSupabaseConfigured) {
+        try {
+          const { error } = await supabase
+            .from('app_users')
+            .update({
+              password: trimmed,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', userId);
+
+          if (error) {
+            console.error('Failed to update password in Supabase:', error);
+            return { success: false, error: error.message };
+          }
+        } catch (e: any) {
+          console.error('Exception updating user password:', e);
+          return { success: false, error: e?.message || 'Failed to update password' };
+        }
+      }
+
+      // Update in local state so Super Admin sees the updated password immediately
+      setTeamMembers((prev) =>
+        prev.map((m) => (m.user_id === userId ? { ...m, password: trimmed } : m))
+      );
+
+      return { success: true };
+    },
+    []
+  );
+
   const value = useMemo(
     () => ({
       isAuthenticated: session.isAuthenticated,
@@ -821,9 +871,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loginWithGoogleGmail,
       loginWithGoogle,
       logout,
-      teamMembers,
+      teamMembers: roleGatedTeamMembers,
       addTeamMember,
       removeTeamMember,
+      updateUserPassword,
     }),
     [
       session.isAuthenticated,
@@ -850,9 +901,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loginWithGoogleGmail,
       loginWithGoogle,
       logout,
-      teamMembers,
+      roleGatedTeamMembers,
       addTeamMember,
       removeTeamMember,
+      updateUserPassword,
     ]
   );
 

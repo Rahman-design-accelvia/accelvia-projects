@@ -169,38 +169,72 @@ describe('Realtime Free Tier & Administration Rules Engine', () => {
     });
   });
 
-  describe('Administration Rule: Password Privacy & Redaction', () => {
-    it('ensures no user can see another user password in the team roster', () => {
-      // Simulate raw database users coming from Supabase
-      const rawDbUsers = [
-        { id: 'u-1', display_name: 'Musfiqur Rahman', email: 'musfiqur@example.com', role: 'admin', password: 'SecretPassword123' },
-        { id: 'u-2', display_name: 'Nahidur Abedin', email: 'nahidur@example.com', role: 'admin', password: 'AnotherSecret456' },
-      ];
+  describe('Administration Rule: Password Privacy & Super Admin Master Control', () => {
+    const rawDbUsers = [
+      { user_id: 'u-1', display_name: 'Musfiqur Rahman', email: 'musfiqur@example.com', role: 'admin', password: 'SecretPassword123' },
+      { user_id: 'u-2', display_name: 'Nahidur Abedin', email: 'nahidur@example.com', role: 'admin', password: 'AnotherSecret456' },
+      { user_id: 'u-3', display_name: 'Dev Alex', email: 'alex@example.com', role: 'member', password: 'MemberPassword789' },
+    ];
 
-      // Sanitization applied when creating team roster state
-      const sanitizedRoster = rawDbUsers.map((u) => ({
-        user_id: u.id,
-        display_name: u.display_name,
-        email: u.email,
-        role: u.role,
-        password: undefined, // Redacted
-      }));
+    it('allows Super Admin to see all users passwords and updated passwords', () => {
+      const isSuperAdmin = true;
+      const currentUserId = 'sa-gravity';
 
-      // In the roster view, passwords are never exposed
-      sanitizedRoster.forEach((member) => {
-        expect(member.password).toBeUndefined();
-      });
+      // Role-gating logic: Super Admin sees raw passwords
+      const roleGatedTeamMembers = isSuperAdmin
+        ? rawDbUsers
+        : rawDbUsers.map((m) => ({
+            ...m,
+            password: m.user_id === currentUserId ? m.password : undefined,
+          }));
 
-      // Verify masked placeholder for UI presentation
-      const getMaskedPasswordDisplay = (password?: string) => {
-        return '••••••••';
-      };
-
-      expect(getMaskedPasswordDisplay(rawDbUsers[0].password)).toBe('••••••••');
-      expect(getMaskedPasswordDisplay(undefined)).toBe('••••••••');
+      expect(roleGatedTeamMembers[0].password).toBe('SecretPassword123');
+      expect(roleGatedTeamMembers[1].password).toBe('AnotherSecret456');
+      expect(roleGatedTeamMembers[2].password).toBe('MemberPassword789');
     });
 
-    it('ensures copy action in roster copies email and never another user password', () => {
+    it('ensures regular Admin and Member cannot see other users passwords (redacted)', () => {
+      const isSuperAdmin = false;
+      const currentUserId = 'u-1'; // Logged in as Musfiqur
+
+      const roleGatedTeamMembers = isSuperAdmin
+        ? rawDbUsers
+        : rawDbUsers.map((m) => ({
+            ...m,
+            password: m.user_id === currentUserId ? m.password : undefined,
+          }));
+
+      // Current user can retain their own password if needed, but ALL other users are undefined
+      expect(roleGatedTeamMembers[0].password).toBe('SecretPassword123');
+      expect(roleGatedTeamMembers[1].password).toBeUndefined();
+      expect(roleGatedTeamMembers[2].password).toBeUndefined();
+
+      // UI presentation for other users always masks as ••••••••
+      const getMaskedDisplay = (memberUserId: string, targetPassword?: string) => {
+        if (!isSuperAdmin && memberUserId !== currentUserId) {
+          return '••••••••';
+        }
+        return targetPassword || '••••••••';
+      };
+
+      expect(getMaskedDisplay('u-2', roleGatedTeamMembers[1].password)).toBe('••••••••');
+      expect(getMaskedDisplay('u-3', roleGatedTeamMembers[2].password)).toBe('••••••••');
+    });
+
+    it('allows Super Admin to edit and update a user password', () => {
+      let team = [...rawDbUsers];
+
+      const updatePasswordSim = (userId: string, newPassword: string) => {
+        team = team.map((m) => (m.user_id === userId ? { ...m, password: newPassword } : m));
+        return { success: true };
+      };
+
+      const result = updatePasswordSim('u-2', 'NewlyUpdatedPassword2026!');
+      expect(result.success).toBe(true);
+      expect(team.find((m) => m.user_id === 'u-2')?.password).toBe('NewlyUpdatedPassword2026!');
+    });
+
+    it('ensures copy action in roster copies credentials with password ONLY for Super Admin', () => {
       const member = {
         name: 'Dev Alex',
         email: 'alex@example.com',
@@ -208,12 +242,21 @@ describe('Realtime Free Tier & Administration Rules Engine', () => {
         password: 'TopSecretPassword99',
       };
 
-      // Safe copy logic: copies only email/identity, never password
-      const getSafeCopyText = (target: { email: string }) => target.email;
+      const getCopyText = (target: typeof member, isViewerSuperAdmin: boolean) => {
+        if (isViewerSuperAdmin) {
+          return `Email: ${target.email}\nPassword: ${target.password}`;
+        }
+        return target.email;
+      };
 
-      const copied = getSafeCopyText(member);
-      expect(copied).toBe('alex@example.com');
-      expect(copied.includes('TopSecretPassword99')).toBe(false);
+      // Super Admin copies with password
+      const saCopied = getCopyText(member, true);
+      expect(saCopied).toContain('TopSecretPassword99');
+
+      // Regular Admin/Member copies email only, NEVER password
+      const adminCopied = getCopyText(member, false);
+      expect(adminCopied).toBe('alex@example.com');
+      expect(adminCopied.includes('TopSecretPassword99')).toBe(false);
     });
   });
 });
