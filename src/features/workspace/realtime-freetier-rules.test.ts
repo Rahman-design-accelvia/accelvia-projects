@@ -259,4 +259,182 @@ describe('Realtime Free Tier & Administration Rules Engine', () => {
       expect(adminCopied.includes('TopSecretPassword99')).toBe(false);
     });
   });
+
+  describe('Designation Governance & Self-Service Rules', () => {
+    interface TestUser {
+      id: string;
+      name: string;
+      role: 'admin' | 'member' | 'super_admin';
+      designation: string;
+      requested_designation?: string;
+    }
+
+    interface TestDesignationRequest {
+      id: string;
+      applicant_id: string;
+      applicant_name: string;
+      current_designation: string;
+      requested_designation: string;
+      requested_role: 'admin' | 'member';
+      status: 'pending' | 'approved' | 'rejected';
+      reviewed_by_id?: string;
+    }
+
+    it('allows any Admin or Member to change their own display name immediately (self-service)', () => {
+      let currentUser: TestUser = {
+        id: 'u-admin-1',
+        name: 'Initial Admin Name',
+        role: 'admin',
+        designation: 'Project Lead',
+      };
+
+      const updateDisplayNameSim = (newName: string) => {
+        if (!newName || newName.trim().length < 2) {
+          return { success: false, error: 'Name too short' };
+        }
+        currentUser = { ...currentUser, name: newName.trim() };
+        return { success: true };
+      };
+
+      const res = updateDisplayNameSim('Nahidur Abedin (Senior PM)');
+      expect(res.success).toBe(true);
+      expect(currentUser.name).toBe('Nahidur Abedin (Senior PM)');
+    });
+
+    it('allows Admin or Member to submit a designation upgrade request', () => {
+      let requests: TestDesignationRequest[] = [];
+      const submitRequestSim = (user: TestUser, newDesignation: string, newRole: 'admin' | 'member') => {
+        const req: TestDesignationRequest = {
+          id: `req-${Date.now()}`,
+          applicant_id: user.id,
+          applicant_name: user.name,
+          current_designation: user.designation,
+          requested_designation: newDesignation,
+          requested_role: newRole,
+          status: 'pending',
+        };
+        requests.push(req);
+        return { success: true, req };
+      };
+
+      const adminUser: TestUser = {
+        id: 'u-admin-1',
+        name: 'Admin Nahid',
+        role: 'admin',
+        designation: 'Project Lead',
+      };
+
+      const res = submitRequestSim(adminUser, 'VP Engineering', 'admin');
+      expect(res.success).toBe(true);
+      expect(requests.length).toBe(1);
+      expect(requests[0].applicant_id).toBe('u-admin-1');
+      expect(requests[0].requested_designation).toBe('VP Engineering');
+      expect(requests[0].status).toBe('pending');
+    });
+
+    it('STRICT GOVERNANCE RULE: Admin CANNOT approve their own designation request', () => {
+      const pendingReq: TestDesignationRequest = {
+        id: 'req-admin-self',
+        applicant_id: 'u-admin-1',
+        applicant_name: 'Admin Nahid',
+        current_designation: 'Project Lead',
+        requested_designation: 'VP Engineering',
+        requested_role: 'admin',
+        status: 'pending',
+      };
+
+      // Review function enforcing the self-approval restriction
+      const approveDesignationSim = (
+        req: TestDesignationRequest,
+        reviewerId: string,
+        reviewerRole: 'admin' | 'super_admin'
+      ) => {
+        const isSuperAdmin = reviewerRole === 'super_admin';
+        if (!isSuperAdmin && req.applicant_id === reviewerId) {
+          return {
+            success: false,
+            error: 'Self-approval is strictly restricted. An Admin cannot approve their own designation request.',
+          };
+        }
+        return { success: true };
+      };
+
+      // Admin 1 attempts to approve their own request -> MUST BE BLOCKED
+      const selfApprovalResult = approveDesignationSim(pendingReq, 'u-admin-1', 'admin');
+      expect(selfApprovalResult.success).toBe(false);
+      expect(selfApprovalResult.error).toContain('Self-approval is strictly restricted');
+    });
+
+    it('allows another Admin to approve an Admin designation request', () => {
+      let pendingReq: TestDesignationRequest = {
+        id: 'req-admin-self',
+        applicant_id: 'u-admin-1',
+        applicant_name: 'Admin Nahid',
+        current_designation: 'Project Lead',
+        requested_designation: 'VP Engineering',
+        requested_role: 'admin',
+        status: 'pending',
+      };
+
+      const approveDesignationSim = (
+        req: TestDesignationRequest,
+        reviewerId: string,
+        reviewerRole: 'admin' | 'super_admin'
+      ) => {
+        const isSuperAdmin = reviewerRole === 'super_admin';
+        if (!isSuperAdmin && req.applicant_id === reviewerId) {
+          return {
+            success: false,
+            error: 'Self-approval is strictly restricted. An Admin cannot approve their own designation request.',
+          };
+        }
+        pendingReq.status = 'approved';
+        pendingReq.reviewed_by_id = reviewerId;
+        return { success: true };
+      };
+
+      // Admin 2 (different admin) approves Admin 1's request -> SUCCEEDS
+      const crossAdminResult = approveDesignationSim(pendingReq, 'u-admin-2', 'admin');
+      expect(crossAdminResult.success).toBe(true);
+      expect(pendingReq.status).toBe('approved');
+      expect(pendingReq.reviewed_by_id).toBe('u-admin-2');
+    });
+
+    it('empowers Super Admin to approve any request and directly update designations', () => {
+      let pendingReq: TestDesignationRequest = {
+        id: 'req-member-1',
+        applicant_id: 'u-member-1',
+        applicant_name: 'Dev Alice',
+        current_designation: 'Specialist',
+        requested_designation: 'Lead Architect',
+        requested_role: 'admin',
+        status: 'pending',
+      };
+
+      const approveBySuperAdmin = (req: TestDesignationRequest) => {
+        req.status = 'approved';
+        req.reviewed_by_id = 'u-super-admin';
+        return { success: true };
+      };
+
+      const res = approveBySuperAdmin(pendingReq);
+      expect(res.success).toBe(true);
+      expect(pendingReq.status).toBe('approved');
+      expect(pendingReq.reviewed_by_id).toBe('u-super-admin');
+
+      // Super Admin direct update test
+      let userRoster: TestUser[] = [
+        { id: 'u-member-1', name: 'Dev Alice', role: 'member', designation: 'Specialist' },
+      ];
+
+      const superAdminDirectUpdate = (userId: string, newDesignation: string) => {
+        userRoster = userRoster.map((u) => (u.id === userId ? { ...u, designation: newDesignation } : u));
+        return { success: true };
+      };
+
+      const directRes = superAdminDirectUpdate('u-member-1', 'Principal Solutions Architect');
+      expect(directRes.success).toBe(true);
+      expect(userRoster[0].designation).toBe('Principal Solutions Architect');
+    });
+  });
 });

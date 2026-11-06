@@ -6,7 +6,7 @@
 // - Reliable Google / Gmail authentication
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { UserRole, UserProfile } from '../../types';
+import { UserRole, UserProfile, DesignationRequest } from '../../types';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase/client';
 
 export interface TeamMember {
@@ -15,6 +15,8 @@ export interface TeamMember {
   email: string;
   role: UserRole;
   requested_role?: UserRole;
+  designation?: string;
+  requested_designation?: string;
   password?: string;
   status: 'active' | 'invited' | 'pending_approval' | 'suspended';
   created_at: string;
@@ -50,6 +52,14 @@ interface AuthContextType {
   pendingRegistrations: TeamMember[];
   approveRegistration: (userId: string, assignedRole: UserRole) => Promise<void>;
   rejectRegistration: (userId: string) => Promise<void>;
+  // Designation & Name Updates
+  updateDisplayName: (newName: string) => Promise<{ success: boolean; error?: string }>;
+  designationRequests: DesignationRequest[];
+  pendingDesignationRequests: DesignationRequest[];
+  submitDesignationRequest: (data: { requestedDesignation: string; requestedRole: UserRole; notes?: string }) => Promise<{ success: boolean; error?: string }>;
+  approveDesignationRequest: (requestId: string) => Promise<{ success: boolean; error?: string }>;
+  rejectDesignationRequest: (requestId: string, reason?: string) => Promise<{ success: boolean; error?: string }>;
+  superAdminUpdateUserDesignation: (userId: string, designation: string, role?: UserRole) => Promise<{ success: boolean; error?: string }>;
   // Standard Authentication
   loginWithCredentials: (email: string, password?: string) => Promise<{ success: boolean; error?: string }>;
   loginAsRole: (role: UserRole) => void;
@@ -218,6 +228,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: u.email,
           role: u.role as UserRole,
           requested_role: u.requested_role as UserRole,
+          designation: u.designation || (u.role === 'super_admin' ? 'Executive Director' : u.role === 'admin' ? 'Project Manager' : 'Specialist Engineer'),
+          requested_designation: u.requested_designation,
           password: u.password,
           status: u.status,
           created_at: u.created_at,
@@ -239,6 +251,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return teamMembers.filter((m) => m.status === 'pending_approval');
   }, [teamMembers]);
 
+  // Designation Requests State
+  const STORAGE_KEY_DESIGNATION_REQUESTS = 'accelvia_designation_requests_v1';
+  const [designationRequests, setDesignationRequests] = useState<DesignationRequest[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_DESIGNATION_REQUESTS);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_DESIGNATION_REQUESTS, JSON.stringify(designationRequests));
+    } catch {}
+  }, [designationRequests]);
+
+  const fetchDesignationRequests = useCallback(async () => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const { data, error } = await supabase
+        .from('app_designation_requests')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!error && Array.isArray(data)) {
+        setDesignationRequests(data);
+      }
+    } catch (e) {
+      console.warn('Could not fetch designation requests from Supabase:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDesignationRequests();
+  }, [fetchDesignationRequests]);
+
+  // Realtime subscription for designation requests
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    const channel = supabase
+      .channel('app_designation_requests_realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'app_designation_requests' },
+        () => {
+          fetchDesignationRequests();
+          fetchSupabaseUsers();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchDesignationRequests, fetchSupabaseUsers]);
+
+  const pendingDesignationRequests = useMemo(() => {
+    return designationRequests.filter((r) => r.status === 'pending');
+  }, [designationRequests]);
+
   // 3. User Session State
   const [session, setSession] = useState<{
     isAuthenticated: boolean;
@@ -246,6 +319,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     userId: string;
     email: string;
     displayName: string;
+    designation?: string;
   }>(() => {
     if (typeof window === 'undefined') {
       return {
@@ -281,17 +355,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const currentRole = session.role;
 
   const currentUser: UserProfile & { role: UserRole } = useMemo(() => {
+    const userInRoster = teamMembers.find((m) => m.user_id === session.userId || m.email === session.email);
     return {
       user_id: session.userId,
       organization_id: 'org-1',
-      display_name: session.displayName || 'Guest User',
+      display_name: session.displayName || userInRoster?.display_name || 'Guest User',
       email: session.email,
+      designation: userInRoster?.designation || session.designation || (session.role === 'super_admin' ? 'Executive Director' : session.role === 'admin' ? 'Project Manager' : 'Specialist Engineer'),
+      requested_designation: userInRoster?.requested_designation,
       account_status: 'active',
       role: session.role,
       created_at: '2026-10-30T00:00:00Z',
       updated_at: '2026-10-30T00:00:00Z',
     };
-  }, [session]);
+  }, [session, teamMembers]);
 
   const isSuperAdmin = currentRole === 'super_admin';
   const isAdmin = currentRole === 'admin';
@@ -845,6 +922,298 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     []
   );
 
+  // Self-Service: All Admins & Members can change their own name immediately
+  const updateDisplayName = useCallback(
+    async (newName: string): Promise<{ success: boolean; error?: string }> => {
+      const trimmed = newName.trim();
+      if (!trimmed || trimmed.length < 2) {
+        return { success: false, error: 'Display name must be at least 2 characters long.' };
+      }
+
+      setSession((prev) => ({ ...prev, displayName: trimmed }));
+
+      // Update in local team members roster
+      setTeamMembers((prev) =>
+        prev.map((m) =>
+          m.user_id === session.userId || m.email.toLowerCase() === session.email.toLowerCase()
+            ? { ...m, display_name: trimmed }
+            : m
+        )
+      );
+
+      // Persist to Supabase app_users table
+      if (isSupabaseConfigured) {
+        try {
+          await supabase
+            .from('app_users')
+            .update({
+              display_name: trimmed,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', session.userId);
+        } catch (e: any) {
+          console.warn('Could not update display name in Supabase:', e);
+        }
+      }
+
+      return { success: true };
+    },
+    [session.userId, session.email]
+  );
+
+  // Submit request for designation / role change
+  const submitDesignationRequest = useCallback(
+    async (data: { requestedDesignation: string; requestedRole: UserRole; notes?: string }): Promise<{ success: boolean; error?: string }> => {
+      const trimmedDesignation = data.requestedDesignation.trim();
+      if (!trimmedDesignation || trimmedDesignation.length < 2) {
+        return { success: false, error: 'Please enter a valid requested designation.' };
+      }
+
+      const newReq: DesignationRequest = {
+        id: `dreq-${Date.now()}`,
+        applicant_id: currentUser.user_id,
+        applicant_name: currentUser.display_name,
+        applicant_email: currentUser.email,
+        applicant_role: currentRole,
+        current_designation: currentUser.designation || (currentRole === 'admin' ? 'Project Manager' : 'Specialist Engineer'),
+        requested_designation: trimmedDesignation,
+        requested_role: data.requestedRole || currentRole,
+        notes: data.notes?.trim() || '',
+        status: 'pending',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      setDesignationRequests((prev) => [
+        newReq,
+        ...prev.filter((r) => !(r.applicant_id === newReq.applicant_id && r.status === 'pending')),
+      ]);
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from('app_designation_requests').insert({
+            id: newReq.id,
+            applicant_id: newReq.applicant_id,
+            applicant_name: newReq.applicant_name,
+            applicant_email: newReq.applicant_email,
+            applicant_role: newReq.applicant_role,
+            current_designation: newReq.current_designation,
+            requested_designation: newReq.requested_designation,
+            requested_role: newReq.requested_role,
+            notes: newReq.notes,
+            status: 'pending',
+            created_at: newReq.created_at,
+            updated_at: newReq.updated_at,
+          });
+
+          await supabase.from('app_users').update({
+            requested_designation: newReq.requested_designation,
+            requested_role: newReq.requested_role,
+            updated_at: new Date().toISOString(),
+          }).eq('id', currentUser.user_id);
+        } catch (e: any) {
+          console.warn('Could not insert designation request:', e);
+        }
+      }
+
+      setTeamMembers((prev) =>
+        prev.map((m) =>
+          m.user_id === currentUser.user_id
+            ? { ...m, requested_designation: newReq.requested_designation, requested_role: newReq.requested_role }
+            : m
+        )
+      );
+
+      return { success: true };
+    },
+    [currentUser, currentRole]
+  );
+
+  // Approve designation request — with STRICT self-approval restriction
+  const approveDesignationRequest = useCallback(
+    async (requestId: string): Promise<{ success: boolean; error?: string }> => {
+      const targetReq = designationRequests.find((r) => r.id === requestId);
+      if (!targetReq) {
+        return { success: false, error: 'Designation request not found.' };
+      }
+
+      // 🚨 CRITICAL RULE: The admin CANNOT approve their own designation request!
+      // It must be approved by ANOTHER admin or a Super Admin!
+      if (!isSuperAdmin && targetReq.applicant_id === currentUser.user_id) {
+        return {
+          success: false,
+          error: 'Self-approval is strictly restricted. An Admin designation request must be reviewed and authorized by another Admin or a Super Admin.',
+        };
+      }
+
+      const updatedReq: DesignationRequest = {
+        ...targetReq,
+        status: 'approved',
+        reviewed_by_id: currentUser.user_id,
+        reviewed_by_name: currentUser.display_name,
+        reviewed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      setDesignationRequests((prev) =>
+        prev.map((r) => (r.id === requestId ? updatedReq : r))
+      );
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from('app_designation_requests').update({
+            status: 'approved',
+            reviewed_by_id: currentUser.user_id,
+            reviewed_by_name: currentUser.display_name,
+            reviewed_at: updatedReq.reviewed_at,
+            updated_at: updatedReq.updated_at,
+          }).eq('id', requestId);
+
+          await supabase.from('app_users').update({
+            designation: targetReq.requested_designation,
+            role: targetReq.requested_role,
+            requested_designation: null,
+            requested_role: null,
+            updated_at: new Date().toISOString(),
+          }).eq('id', targetReq.applicant_id);
+        } catch (e: any) {
+          console.warn('Could not approve designation in Supabase:', e);
+        }
+      }
+
+      setTeamMembers((prev) =>
+        prev.map((m) =>
+          m.user_id === targetReq.applicant_id
+            ? {
+                ...m,
+                designation: targetReq.requested_designation,
+                role: targetReq.requested_role,
+                requested_designation: undefined,
+                requested_role: undefined,
+              }
+            : m
+        )
+      );
+
+      if (targetReq.applicant_id === currentUser.user_id) {
+        setSession((prev) => ({
+          ...prev,
+          role: targetReq.requested_role,
+          designation: targetReq.requested_designation,
+        }));
+      }
+
+      return { success: true };
+    },
+    [designationRequests, isSuperAdmin, currentUser]
+  );
+
+  // Reject designation request
+  const rejectDesignationRequest = useCallback(
+    async (requestId: string, reason?: string): Promise<{ success: boolean; error?: string }> => {
+      const targetReq = designationRequests.find((r) => r.id === requestId);
+      if (!targetReq) {
+        return { success: false, error: 'Designation request not found.' };
+      }
+
+      // Self-rejection/manipulation guard
+      if (!isSuperAdmin && targetReq.applicant_id === currentUser.user_id) {
+        return {
+          success: false,
+          error: 'An Admin cannot reject their own designation request.',
+        };
+      }
+
+      const updatedReq: DesignationRequest = {
+        ...targetReq,
+        status: 'rejected',
+        notes: reason ? `${targetReq.notes || ''} [Rejected: ${reason}]`.trim() : targetReq.notes,
+        reviewed_by_id: currentUser.user_id,
+        reviewed_by_name: currentUser.display_name,
+        reviewed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      setDesignationRequests((prev) =>
+        prev.map((r) => (r.id === requestId ? updatedReq : r))
+      );
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from('app_designation_requests').update({
+            status: 'rejected',
+            notes: updatedReq.notes,
+            reviewed_by_id: currentUser.user_id,
+            reviewed_by_name: currentUser.display_name,
+            reviewed_at: updatedReq.reviewed_at,
+            updated_at: updatedReq.updated_at,
+          }).eq('id', requestId);
+
+          await supabase.from('app_users').update({
+            requested_designation: null,
+            requested_role: null,
+            updated_at: new Date().toISOString(),
+          }).eq('id', targetReq.applicant_id);
+        } catch (e: any) {
+          console.warn('Could not reject designation in Supabase:', e);
+        }
+      }
+
+      setTeamMembers((prev) =>
+        prev.map((m) =>
+          m.user_id === targetReq.applicant_id
+            ? { ...m, requested_designation: undefined, requested_role: undefined }
+            : m
+        )
+      );
+
+      return { success: true };
+    },
+    [designationRequests, isSuperAdmin, currentUser]
+  );
+
+  // Super Admin direct designation update
+  const superAdminUpdateUserDesignation = useCallback(
+    async (userId: string, designation: string, role?: UserRole): Promise<{ success: boolean; error?: string }> => {
+      const trimmed = designation.trim();
+      if (!trimmed) return { success: false, error: 'Designation cannot be empty.' };
+
+      if (isSupabaseConfigured) {
+        try {
+          const updatePayload: Record<string, any> = {
+            designation: trimmed,
+            updated_at: new Date().toISOString(),
+          };
+          if (role) updatePayload.role = role;
+
+          await supabase.from('app_users').update(updatePayload).eq('id', userId);
+        } catch (e: any) {
+          console.warn('Could not directly update designation in Supabase:', e);
+          return { success: false, error: e?.message || 'Database error' };
+        }
+      }
+
+      setTeamMembers((prev) =>
+        prev.map((m) =>
+          m.user_id === userId
+            ? { ...m, designation: trimmed, ...(role ? { role } : {}) }
+            : m
+        )
+      );
+
+      if (userId === currentUser.user_id) {
+        setSession((prev) => ({
+          ...prev,
+          designation: trimmed,
+          ...(role ? { role } : {}),
+        }));
+      }
+
+      return { success: true };
+    },
+    [currentUser.user_id]
+  );
+
   const value = useMemo(
     () => ({
       isAuthenticated: session.isAuthenticated,
@@ -866,6 +1235,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       pendingRegistrations,
       approveRegistration,
       rejectRegistration,
+      updateDisplayName,
+      designationRequests,
+      pendingDesignationRequests,
+      submitDesignationRequest,
+      approveDesignationRequest,
+      rejectDesignationRequest,
+      superAdminUpdateUserDesignation,
       loginWithCredentials,
       loginAsRole,
       loginWithGoogleGmail,
@@ -896,6 +1272,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       pendingRegistrations,
       approveRegistration,
       rejectRegistration,
+      updateDisplayName,
+      designationRequests,
+      pendingDesignationRequests,
+      submitDesignationRequest,
+      approveDesignationRequest,
+      rejectDesignationRequest,
+      superAdminUpdateUserDesignation,
       loginWithCredentials,
       loginAsRole,
       loginWithGoogleGmail,

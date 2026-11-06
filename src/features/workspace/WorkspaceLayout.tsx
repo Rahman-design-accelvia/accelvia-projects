@@ -56,7 +56,9 @@ import {
   Users,
   CheckCircle2,
   Palette,
-  Smartphone
+  Smartphone,
+  User,
+  Briefcase
 } from 'lucide-react';
 import { Sun, Moon } from '../../components/ThemeIcons';
 import { BellIcon, BellRingIcon } from '../../components/NotificationIcons';
@@ -65,6 +67,7 @@ import { NotificationCenterDropdown } from '../notifications/NotificationCenterD
 import { PushToastContainer } from '../notifications/PushToastContainer';
 import { LoginView } from '../auth/LoginView';
 import { TeamManagementModal } from '../auth/TeamManagementModal';
+import { UserProfileModal } from '../auth/UserProfileModal';
 import { Modal } from '../../components/Modal';
 import { ProjectCalendarModal } from '../calendar/ProjectCalendarModal';
 import { Calendar as CalendarIcon } from 'lucide-react';
@@ -121,7 +124,7 @@ export function extractMessageSnippet(contentJson: Record<string, unknown>): str
 }
 
 export const WorkspaceLayout: React.FC = () => {
-  const { currentRole, currentUser, isSuperAdmin, isAdmin, isMember, isAuthenticated, logout, pendingRegistrations, teamMembers, canViewMoney } = useAuth();
+  const { currentRole, currentUser, isSuperAdmin, isAdmin, isMember, isAuthenticated, logout, pendingRegistrations, teamMembers, canViewMoney, pendingDesignationRequests } = useAuth();
   const { theme, toggleTheme, isDark, preset, accentColor } = useTheme();
   const { notify, unreadCount } = useNotifications();
   const { companyName } = useOrganization();
@@ -131,10 +134,13 @@ export const WorkspaceLayout: React.FC = () => {
     ? pendingRegistrations.length
     : pendingRegistrations.filter((p) => p.role !== 'super_admin' && p.requested_role !== 'super_admin').length;
 
+  const totalPendingApprovalsCount = visiblePendingCount + (pendingDesignationRequests?.length || 0);
+
   // Navigation & dropdown states
   const [isNotificationMenuOpen, setIsNotificationMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isCompanySettingsModalOpen, setIsCompanySettingsModalOpen] = useState(false);
   const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
 
@@ -2012,16 +2018,16 @@ export const WorkspaceLayout: React.FC = () => {
 
 
           {/* Super Admin & Admin Pending Registrations Quick Pill */}
-          {(isSuperAdmin || isAdmin) && visiblePendingCount > 0 && (
+          {(isSuperAdmin || isAdmin) && totalPendingApprovalsCount > 0 && (
             <button
               type="button"
               onClick={() => setIsTeamModalOpen(true)}
               className="px-2 sm:px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-700 dark:text-amber-300 font-bold text-xs flex items-center gap-1.5 animate-pulse cursor-pointer shadow-xs"
-              title="Review and approve pending user registrations"
+              title="Review and approve pending registrations & designation requests"
             >
               <Clock className="w-3.5 h-3.5 text-amber-500" />
-              <span className="hidden sm:inline">{visiblePendingCount} Pending Approval{visiblePendingCount > 1 ? 's' : ''}</span>
-              <span className="sm:hidden">{visiblePendingCount}</span>
+              <span className="hidden sm:inline">{totalPendingApprovalsCount} Pending Approval{totalPendingApprovalsCount > 1 ? 's' : ''}</span>
+              <span className="sm:hidden">{totalPendingApprovalsCount}</span>
             </button>
           )}
 
@@ -2040,7 +2046,9 @@ export const WorkspaceLayout: React.FC = () => {
                 <div className="font-semibold text-slate-800 dark:text-slate-200 leading-none truncate max-w-[90px]">
                   {currentUser.display_name}
                 </div>
-                <div className="text-[10px] text-slate-500 capitalize">{currentRole.replace('_', ' ')}</div>
+                <div className="text-[10px] text-slate-500 truncate max-w-[90px]" title={currentUser.designation || currentRole.replace('_', ' ')}>
+                  {currentUser.designation || currentRole.replace('_', ' ')}
+                </div>
               </div>
             </button>
 
@@ -2049,12 +2057,33 @@ export const WorkspaceLayout: React.FC = () => {
                 <div className="border-b border-slate-200 dark:border-slate-800 pb-2">
                   <div className="font-bold text-slate-900 dark:text-slate-100">{currentUser.display_name}</div>
                   <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400 truncate">{currentUser.email}</div>
-                  <div className="mt-1">
+                  <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                     <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
                       {currentRole.replace('_', ' ')}
                     </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                      {currentUser.designation || 'Team Member'}
+                    </span>
                   </div>
                 </div>
+
+                {/* Profile & Designation Self-Service (Available to All Users) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    setIsProfileModalOpen(true);
+                  }}
+                  className="w-full text-left py-1.5 px-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-semibold flex items-center justify-between transition cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <User className="w-3.5 h-3.5 text-emerald-600 dark:text-teal-400" />
+                    <span>My Profile & Designation</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Edit
+                  </span>
+                </button>
 
                 {/* Super Admin & Admin Team Management Action */}
                 {(isSuperAdmin || isAdmin) && (
@@ -2070,9 +2099,9 @@ export const WorkspaceLayout: React.FC = () => {
                       <Users className="w-3.5 h-3.5" />
                       <span>Team & Approvals</span>
                     </div>
-                    {visiblePendingCount > 0 && (
+                    {totalPendingApprovalsCount > 0 && (
                       <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-rose-500 text-white font-mono font-bold animate-pulse">
-                        {visiblePendingCount}
+                        {totalPendingApprovalsCount}
                       </span>
                     )}
                   </button>
@@ -2415,6 +2444,12 @@ export const WorkspaceLayout: React.FC = () => {
           onClose={() => setIsTeamModalOpen(false)}
         />
       )}
+
+      {/* User Self-Service Profile & Designation Request Modal */}
+      <UserProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+      />
 
       {/* Admin Confirm Project Completion Modal */}
       {isMarkCompleteDialogOpen && activeProject && (

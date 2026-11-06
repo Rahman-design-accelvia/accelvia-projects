@@ -35,7 +35,27 @@ export interface UserProfile {
   display_name: string;
   email: string;
   avatar_storage_path?: string | null;
+  designation?: string;
+  requested_designation?: string;
   account_status: AccountStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DesignationRequest {
+  id: string;
+  applicant_id: string;
+  applicant_name: string;
+  applicant_email: string;
+  applicant_role: UserRole;
+  current_designation?: string;
+  requested_designation: string;
+  requested_role: UserRole;
+  notes?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewed_by_id?: string;
+  reviewed_by_name?: string;
+  reviewed_at?: string;
   created_at: string;
   updated_at: string;
 }
