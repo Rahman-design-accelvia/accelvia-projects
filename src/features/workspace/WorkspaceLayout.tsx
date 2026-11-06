@@ -101,6 +101,25 @@ export function filterMessagesForProject(
   });
 }
 
+/**
+ * Helper to extract plain text snippet from Tiptap JSON document for push notification previews
+ */
+export function extractMessageSnippet(contentJson: Record<string, unknown>): string {
+  try {
+    const doc = contentJson as any;
+    if (Array.isArray(doc?.content)) {
+      const texts: string[] = [];
+      const recurse = (node: any) => {
+        if (node?.text) texts.push(node.text);
+        if (Array.isArray(node?.content)) node.content.forEach(recurse);
+      };
+      doc.content.forEach(recurse);
+      if (texts.length > 0) return texts.join(' ').replace(/\s+/g, ' ').trim();
+    }
+  } catch {}
+  return 'New message in conversation thread';
+}
+
 export const WorkspaceLayout: React.FC = () => {
   const { currentRole, currentUser, isSuperAdmin, isAdmin, isMember, isAuthenticated, logout, pendingRegistrations, teamMembers, canViewMoney } = useAuth();
   const { theme, toggleTheme, isDark, preset, accentColor } = useTheme();
@@ -299,21 +318,59 @@ export const WorkspaceLayout: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Synchronize state across browser sessions and persist to localStorage + Supabase central cloud
-  const syncToSupabase = useCallback(async (key: string, value: any) => {
-    if (!isSupabaseConfigured) return;
-    try {
-      await supabase.from('app_workspace_data').upsert({
-        key,
-        value,
-        updated_at: new Date().toISOString(),
-      });
-    } catch (e) {
-      console.warn(`Could not sync ${key} to Supabase:`, e);
-    }
+  // Cache to track the last known cloud JSON state per key — prevents infinite echo loops & saves Supabase free tier quotas
+  const lastCloudJson = useRef<Record<string, string>>({});
+  // Coalescing debounce timers per key to avoid high-frequency REST writes during rapid user actions
+  const syncDebounceTimers = useRef<Record<string, NodeJS.Timeout>>({});
+  const isLoadedFromCloud = useRef(false);
+
+  // Keep a reference to current messages for diffing on realtime broadcast
+  const messagesRef = useRef<SafeMessage[]>(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  // Keep a reference to current projects for notifications
+  const projectsRef = useRef<Project[]>(projects);
+  useEffect(() => {
+    projectsRef.current = projects;
+  }, [projects]);
+
+  // Clean up debounce timers on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(syncDebounceTimers.current).forEach((t) => clearTimeout(t));
+    };
   }, []);
 
-  const isLoadedFromCloud = useRef(false);
+  // Free Tier Guarded Cloud Sync: Debounced, deduplicated, and echo-suppressed
+  const queueSyncToCloud = useCallback((key: string, value: any, debounceMs = 400) => {
+    if (!isSupabaseConfigured || !isLoadedFromCloud.current) return;
+
+    const currentJson = JSON.stringify(value);
+    // If identical to last known cloud state, completely skip (0 network calls, 0 quota burned!)
+    if (lastCloudJson.current[key] === currentJson) {
+      return;
+    }
+
+    if (syncDebounceTimers.current[key]) {
+      clearTimeout(syncDebounceTimers.current[key]);
+    }
+
+    syncDebounceTimers.current[key] = setTimeout(async () => {
+      // Record current JSON so incoming real-time echo is dropped
+      lastCloudJson.current[key] = currentJson;
+      try {
+        await supabase.from('app_workspace_data').upsert({
+          key,
+          value,
+          updated_at: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.warn(`[Sync] Could not upsert ${key} to Supabase:`, e);
+      }
+    }, debounceMs);
+  }, []);
 
   // Fetch complete workspace data from Supabase centrally on initial load
   const fetchSupabaseWorkspaceData = useCallback(async () => {
@@ -325,37 +382,40 @@ export const WorkspaceLayout: React.FC = () => {
       const { data, error } = await supabase.from('app_workspace_data').select('*');
       if (!error && Array.isArray(data) && data.length > 0) {
         data.forEach((row) => {
-          if (row.key === 'clients' && Array.isArray(row.value) && row.value.length > 0) {
+          const valJson = JSON.stringify(row.value);
+          lastCloudJson.current[row.key] = valJson;
+
+          if (row.key === 'clients' && Array.isArray(row.value)) {
             setClients(row.value);
-            try { localStorage.setItem(STORAGE_KEY_CLIENTS, JSON.stringify(row.value)); } catch {}
+            try { localStorage.setItem(STORAGE_KEY_CLIENTS, valJson); } catch {}
           }
-          if (row.key === 'projects' && Array.isArray(row.value) && row.value.length > 0) {
+          if (row.key === 'projects' && Array.isArray(row.value)) {
             setProjects(row.value);
-            try { localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(row.value)); } catch {}
+            try { localStorage.setItem(STORAGE_KEY_PROJECTS, valJson); } catch {}
           }
           if (row.key === 'packages' && Array.isArray(row.value)) {
             setPackages(row.value);
-            try { localStorage.setItem(STORAGE_KEY_PACKAGES, JSON.stringify(row.value)); } catch {}
+            try { localStorage.setItem(STORAGE_KEY_PACKAGES, valJson); } catch {}
           }
           if (row.key === 'versions' && Array.isArray(row.value)) {
             setVersions(row.value);
-            try { localStorage.setItem(STORAGE_KEY_VERSIONS, JSON.stringify(row.value)); } catch {}
+            try { localStorage.setItem(STORAGE_KEY_VERSIONS, valJson); } catch {}
           }
           if (row.key === 'work_orders' && Array.isArray(row.value)) {
             setWorkOrders(row.value);
-            try { localStorage.setItem(STORAGE_KEY_WORK_ORDERS, JSON.stringify(row.value)); } catch {}
+            try { localStorage.setItem(STORAGE_KEY_WORK_ORDERS, valJson); } catch {}
           }
           if (row.key === 'messages' && Array.isArray(row.value)) {
             setMessages(row.value);
-            try { localStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(row.value)); } catch {}
+            try { localStorage.setItem(STORAGE_KEY_MESSAGES, valJson); } catch {}
           }
           if (row.key === 'financials' && row.value && typeof row.value === 'object') {
             setFinancials(row.value);
-            try { localStorage.setItem(STORAGE_KEY_FINANCIALS, JSON.stringify(row.value)); } catch {}
+            try { localStorage.setItem(STORAGE_KEY_FINANCIALS, valJson); } catch {}
           }
           if (row.key === 'audit_events' && Array.isArray(row.value)) {
             setAuditEvents(row.value);
-            try { localStorage.setItem(STORAGE_KEY_AUDIT, JSON.stringify(row.value)); } catch {}
+            try { localStorage.setItem(STORAGE_KEY_AUDIT, valJson); } catch {}
           }
         });
       }
@@ -370,7 +430,7 @@ export const WorkspaceLayout: React.FC = () => {
     fetchSupabaseWorkspaceData();
   }, [fetchSupabaseWorkspaceData]);
 
-  // Real-time synchronization across different devices and browsers via Supabase Realtime
+  // Real-time synchronization across different devices and browsers via single Supabase Realtime channel
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     const channel = supabase
@@ -381,16 +441,92 @@ export const WorkspaceLayout: React.FC = () => {
         (payload) => {
           const key = (payload.new as any)?.key;
           const value = (payload.new as any)?.value;
-          if (!key || !value) return;
+          if (!key || value === undefined) return;
 
-          if (key === 'clients') setClients(value);
-          if (key === 'projects') setProjects(value);
-          if (key === 'packages') setPackages(value);
-          if (key === 'versions') setVersions(value);
-          if (key === 'work_orders') setWorkOrders(value);
-          if (key === 'messages') setMessages(value);
-          if (key === 'financials') setFinancials(value);
-          if (key === 'audit_events') setAuditEvents(value);
+          const incomingJson = JSON.stringify(value);
+          // Drop self-echoes immediately (0 re-renders, 0 ping-pong loops)
+          if (lastCloudJson.current[key] === incomingJson) {
+            return;
+          }
+
+          // Update last known cloud state before triggering state updates
+          lastCloudJson.current[key] = incomingJson;
+
+          if (key === 'clients' && Array.isArray(value)) {
+            setClients(value);
+            try { localStorage.setItem(STORAGE_KEY_CLIENTS, incomingJson); } catch {}
+          } else if (key === 'projects' && Array.isArray(value)) {
+            setProjects(value);
+            try { localStorage.setItem(STORAGE_KEY_PROJECTS, incomingJson); } catch {}
+          } else if (key === 'packages' && Array.isArray(value)) {
+            setPackages(value);
+            try { localStorage.setItem(STORAGE_KEY_PACKAGES, incomingJson); } catch {}
+          } else if (key === 'versions' && Array.isArray(value)) {
+            setVersions(value);
+            try { localStorage.setItem(STORAGE_KEY_VERSIONS, incomingJson); } catch {}
+          } else if (key === 'work_orders' && Array.isArray(value)) {
+            setWorkOrders(value);
+            try { localStorage.setItem(STORAGE_KEY_WORK_ORDERS, incomingJson); } catch {}
+          } else if (key === 'financials' && value && typeof value === 'object') {
+            setFinancials(value);
+            try { localStorage.setItem(STORAGE_KEY_FINANCIALS, incomingJson); } catch {}
+          } else if (key === 'audit_events' && Array.isArray(value)) {
+            setAuditEvents(value);
+            try { localStorage.setItem(STORAGE_KEY_AUDIT, incomingJson); } catch {}
+          } else if (key === 'messages' && Array.isArray(value)) {
+            // Check for new incoming messages from other users and trigger notification
+            const prevIds = new Set(messagesRef.current.map((m) => m.id));
+            const newArrivals = (value as SafeMessage[]).filter((m) => !prevIds.has(m.id));
+
+            newArrivals.forEach((m) => {
+              if (m.author_id && m.author_id !== currentUser.user_id) {
+                const rawSnippet = extractMessageSnippet(m.content_json as Record<string, unknown>);
+                let snippet = rawSnippet;
+                if ((!snippet || snippet === 'New message in conversation thread') && m.voice_note) {
+                  snippet = `🎙️ Voice Note (${Math.round(m.voice_note.duration_seconds)}s)${m.voice_note.transcript ? ': "' + m.voice_note.transcript + '"' : ''}`;
+                }
+
+                const isManagementMentioned = /@Management\b/i.test(snippet) && !isSuperAdmin;
+                // Mask Super Admin identity to Management for Admins and Members
+                const authorDisplayName = m.author_is_management ? 'Management' : m.author_name;
+
+                const mentionedMembers = (teamMembers || []).filter((tm) => {
+                  if (tm.user_id === m.author_id) return false;
+                  const pattern = new RegExp(`@${tm.display_name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i');
+                  return pattern.test(snippet);
+                });
+
+                const isMentioned = mentionedMembers.some((tm) => tm.user_id === currentUser.user_id) ||
+                  (isManagementMentioned && isSuperAdmin);
+
+                const targetProj = projectsRef.current.find((p) => p.id === m.project_id);
+
+                if (isMentioned) {
+                  notify({
+                    title: `🔔 Mention Alert: ${authorDisplayName} mentioned you`,
+                    body: snippet.length > 120 ? `"${snippet.slice(0, 117)}..."` : `"${snippet}"`,
+                    category: 'conversation',
+                    priority: 'high',
+                    project_id: m.project_id,
+                    project_name: targetProj?.name,
+                    author_name: authorDisplayName,
+                  });
+                } else {
+                  notify({
+                    title: `💬 New Message (${authorDisplayName})`,
+                    body: snippet.length > 120 ? `${snippet.slice(0, 117)}...` : snippet,
+                    category: 'conversation',
+                    project_id: m.project_id,
+                    project_name: targetProj?.name,
+                    author_name: authorDisplayName,
+                  });
+                }
+              }
+            });
+
+            setMessages(value);
+            try { localStorage.setItem(STORAGE_KEY_MESSAGES, incomingJson); } catch {}
+          }
         }
       )
       .subscribe();
@@ -398,7 +534,7 @@ export const WorkspaceLayout: React.FC = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [currentUser.user_id, isSuperAdmin, notify, teamMembers]);
 
   // Auto-select first project if current selectedProjectId is invalid or not in loaded projects
   useEffect(() => {
@@ -409,43 +545,43 @@ export const WorkspaceLayout: React.FC = () => {
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_CLIENTS, JSON.stringify(clients)); } catch {}
-    if (isLoadedFromCloud.current && clients.length > 0) syncToSupabase('clients', clients);
-  }, [clients, syncToSupabase]);
+    queueSyncToCloud('clients', clients);
+  }, [clients, queueSyncToCloud]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(projects)); } catch {}
-    if (isLoadedFromCloud.current && projects.length > 0) syncToSupabase('projects', projects);
-  }, [projects, syncToSupabase]);
+    queueSyncToCloud('projects', projects);
+  }, [projects, queueSyncToCloud]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_FINANCIALS, JSON.stringify(financials)); } catch {}
-    if (isLoadedFromCloud.current && Object.keys(financials).length > 0) syncToSupabase('financials', financials);
-  }, [financials, syncToSupabase]);
+    queueSyncToCloud('financials', financials);
+  }, [financials, queueSyncToCloud]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_PACKAGES, JSON.stringify(packages)); } catch {}
-    if (isLoadedFromCloud.current && packages.length > 0) syncToSupabase('packages', packages);
-  }, [packages, syncToSupabase]);
+    queueSyncToCloud('packages', packages);
+  }, [packages, queueSyncToCloud]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_VERSIONS, JSON.stringify(versions)); } catch {}
-    if (isLoadedFromCloud.current && versions.length > 0) syncToSupabase('versions', versions);
-  }, [versions, syncToSupabase]);
+    queueSyncToCloud('versions', versions);
+  }, [versions, queueSyncToCloud]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_WORK_ORDERS, JSON.stringify(workOrders)); } catch {}
-    if (isLoadedFromCloud.current && workOrders.length > 0) syncToSupabase('work_orders', workOrders);
-  }, [workOrders, syncToSupabase]);
+    queueSyncToCloud('work_orders', workOrders);
+  }, [workOrders, queueSyncToCloud]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(messages)); } catch {}
-    if (isLoadedFromCloud.current && messages.length > 0) syncToSupabase('messages', messages);
-  }, [messages, syncToSupabase]);
+    queueSyncToCloud('messages', messages, 200);
+  }, [messages, queueSyncToCloud]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_AUDIT, JSON.stringify(auditEvents)); } catch {}
-    if (isLoadedFromCloud.current && auditEvents.length > 0) syncToSupabase('audit_events', auditEvents);
-  }, [auditEvents, syncToSupabase]);
+    queueSyncToCloud('audit_events', auditEvents);
+  }, [auditEvents, queueSyncToCloud]);
 
   // Cross-tab real-time sync & notifications receiver
   useEffect(() => {
@@ -582,23 +718,6 @@ export const WorkspaceLayout: React.FC = () => {
       source: 'ui',
     };
     setAuditEvents((a) => [auditEntry, ...a]);
-  };
-
-  // Helper to extract text from Tiptap JSON document for push notification previews
-  const extractMessageSnippet = (contentJson: Record<string, unknown>): string => {
-    try {
-      const doc = contentJson as any;
-      if (Array.isArray(doc?.content)) {
-        const texts: string[] = [];
-        const recurse = (node: any) => {
-          if (node?.text) texts.push(node.text);
-          if (Array.isArray(node?.content)) node.content.forEach(recurse);
-        };
-        doc.content.forEach(recurse);
-        if (texts.length > 0) return texts.join(' ').trim();
-      }
-    } catch {}
-    return 'New message in conversation thread';
   };
 
   const handleSendMessage = (
