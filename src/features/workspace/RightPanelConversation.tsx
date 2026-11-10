@@ -223,7 +223,7 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
       </div>
 
       {/* Message Feed Area */}
-      <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 space-y-3 sm:space-y-4">
+      <div className="flex-1 overflow-y-auto px-2 sm:px-5 py-3 sm:py-4 space-y-3 sm:space-y-4">
         {messages.length === 0 ? (
           <div className="text-center py-16 text-slate-500 space-y-2">
             <MessageSquare className="w-8 h-8 mx-auto text-slate-700" />
@@ -251,32 +251,32 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
             return (
               <div
                 key={msg.id}
-                className={`flex gap-3 text-xs group ${
+                className={`flex gap-2 sm:gap-3 text-xs group ${
                   msg.is_deleted ? 'opacity-60 italic' : ''
                 }`}
               >
                 {/* Author Avatar */}
                 <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold ${
+                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-xs ${
                     isAuthorSuperAdmin
                       ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                       : 'bg-slate-800 text-teal-400 border border-slate-700'
                   }`}
                 >
                   {isAuthorSuperAdmin ? (
-                    <Sparkles className="w-4 h-4 text-amber-400" />
+                    <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
                   ) : (
                     displayedAuthor.charAt(0).toUpperCase()
                   )}
                 </div>
 
                 {/* Message Body */}
-                <div className="flex-1 bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800/80 rounded-xl p-3.5 space-y-2 hover:border-slate-300 dark:hover:border-slate-700/80 transition shadow-xs">
+                <div className="flex-1 min-w-0 bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-2.5 sm:p-3.5 space-y-2 hover:border-slate-300 dark:hover:border-slate-700/80 transition shadow-xs overflow-hidden">
                   {/* Message Meta Header */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 pb-0.5">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                       <span
-                        className={`font-semibold ${
+                        className={`font-semibold truncate max-w-[140px] sm:max-w-none ${
                           isAuthorSuperAdmin ? 'text-amber-700 dark:text-amber-300 font-bold' : 'text-slate-800 dark:text-slate-200'
                         }`}
                       >
@@ -295,7 +295,7 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
                     </div>
 
                     {/* Dual-Time Timestamp Display */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 shrink-0 ml-auto">
                       <DualTimeBadge
                         isoInstant={msg.event_at}
                         projectIanaTimezone={project.timezone}

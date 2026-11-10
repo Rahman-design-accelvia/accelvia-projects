@@ -433,10 +433,10 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex gap-2 mt-3 border-b theme-border">
+        <div className="flex gap-2 mt-3 border-b theme-border overflow-x-auto no-scrollbar">
           <button
             onClick={() => setActiveTab('scope')}
-            className={`pb-2 px-1 text-xs font-semibold flex items-center gap-1.5 transition ${
+            className={`pb-2 px-1 text-xs font-semibold flex items-center gap-1.5 transition whitespace-nowrap shrink-0 ${
               activeTab === 'scope'
                 ? 'border-b-2 font-bold'
                 : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
@@ -444,11 +444,12 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
             style={activeTab === 'scope' ? { borderBottomColor: accentColor, color: accentColor } : undefined}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>Scope Packages & Versions ({isMember ? approvedVersionsCount : versions.length})</span>
+            <span className="hidden sm:inline">Scope Packages & Versions ({isMember ? approvedVersionsCount : versions.length})</span>
+            <span className="sm:hidden">Scope & Versions ({isMember ? approvedVersionsCount : versions.length})</span>
           </button>
           <button
             onClick={() => setActiveTab('work-orders')}
-            className={`pb-2 px-1 text-xs font-semibold flex items-center gap-1.5 transition ${
+            className={`pb-2 px-1 text-xs font-semibold flex items-center gap-1.5 transition whitespace-nowrap shrink-0 ${
               activeTab === 'work-orders'
                 ? 'border-b-2 font-bold'
                 : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
@@ -567,9 +568,9 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                         {ver.items && ver.items.length > 0 && (
                           <div className="space-y-1 text-xs text-slate-400 pt-1">
                             {ver.items.map((item, idx) => (
-                              <div key={idx} className="flex justify-between items-center text-[11px]">
-                                <span className="truncate max-w-[280px]">• {item.title}</span>
-                                <span className="font-mono text-slate-300 shrink-0">
+                              <div key={idx} className="flex justify-between items-start gap-2 text-[11px] py-0.5">
+                                <span className="text-slate-700 dark:text-slate-300 break-words flex-1 min-w-0">• {item.title}</span>
+                                <span className="font-mono text-slate-800 dark:text-slate-300 font-semibold shrink-0">
                                   {formatHours(item.hours)}
                                 </span>
                               </div>

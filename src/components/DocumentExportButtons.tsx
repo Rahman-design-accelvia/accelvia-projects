@@ -24,6 +24,7 @@ interface EstimateExportProps {
   clientName?: string;
   canViewMoney?: boolean;
   size?: 'sm' | 'xs';
+  fullWidth?: boolean;
 }
 
 interface WorkOrderExportProps {
@@ -33,6 +34,7 @@ interface WorkOrderExportProps {
   clientName?: string;
   canViewMoney?: boolean;
   size?: 'sm' | 'xs';
+  fullWidth?: boolean;
 }
 
 type DocumentExportButtonsProps = EstimateExportProps | WorkOrderExportProps;
@@ -97,20 +99,21 @@ export const DocumentExportButtons: React.FC<DocumentExportButtonsProps> = (prop
     }
   };
 
+  const isFullWidth = props.fullWidth ?? false;
   const btnClasses = size === 'xs'
-    ? 'px-2 py-1 text-[11px] rounded-md font-medium whitespace-nowrap cursor-pointer'
-    : 'px-2.5 py-1.5 text-xs rounded-lg font-semibold whitespace-nowrap cursor-pointer';
+    ? `${isFullWidth ? 'w-full justify-center py-2 px-2.5 text-xs' : 'px-2 py-1 text-[11px]'} rounded-lg font-medium whitespace-nowrap cursor-pointer`
+    : `${isFullWidth ? 'w-full justify-center py-2.5 px-3 text-xs' : 'px-2.5 py-1.5 text-xs'} rounded-lg font-semibold whitespace-nowrap cursor-pointer`;
 
   return (
-    <div className="flex items-center gap-1.5 shrink-0">
+    <div className={isFullWidth ? 'grid grid-cols-2 gap-2 w-full' : 'flex items-center gap-1.5 shrink-0'}>
       {/* Copy Button */}
       <button
         type="button"
         onClick={handleCopy}
-        className={`${btnClasses} flex items-center gap-1 transition border ${
+        className={`${btnClasses} flex items-center gap-1.5 transition border ${
           copied
             ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-            : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700'
+            : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 shadow-2xs'
         }`}
         title="Copy table and details to clipboard (pasting into Excel or Sheets formats cells!)"
       >
@@ -122,7 +125,7 @@ export const DocumentExportButtons: React.FC<DocumentExportButtonsProps> = (prop
         ) : (
           <>
             <Copy className="w-3.5 h-3.5" />
-            <span>Copy</span>
+            <span>Copy Table</span>
           </>
         )}
       </button>
@@ -131,11 +134,11 @@ export const DocumentExportButtons: React.FC<DocumentExportButtonsProps> = (prop
       <button
         type="button"
         onClick={handlePrintPDF}
-        className={`${btnClasses} flex items-center gap-1 transition border bg-white hover:bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700`}
+        className={`${btnClasses} flex items-center gap-1.5 transition border bg-white hover:bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 shadow-2xs`}
         title="Generate official printable PDF / document specification"
       >
         <Printer className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-        <span>PDF</span>
+        <span>Print PDF</span>
       </button>
     </div>
   );

@@ -256,6 +256,12 @@
   .tap-highlight-transparent {
     -webkit-tap-highlight-color: transparent;
   }
+  .pb-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  }
+  .pt-safe {
+    padding-top: max(0.5rem, env(safe-area-inset-top, 0px));
+  }
 }
 
 /* Standalone PWA & Touch ergonomics */
