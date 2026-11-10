@@ -75,6 +75,7 @@ import { useOrganization } from '../organization/OrganizationContext';
 import { CompanySettingsModal } from '../organization/CompanySettingsModal';
 import { ThemeCustomizerModal } from '../theme/ThemeCustomizerModal';
 import { InstallAppBanner } from '../../components/InstallAppBanner';
+import { CreateEstimateModal } from './CreateEstimateModal';
 
 /**
  * Isolates conversation messages strictly to a specific project.
@@ -264,6 +265,13 @@ export const WorkspaceLayout: React.FC = () => {
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [reviewVersionId, setReviewVersionId] = useState<string | null>(null);
   const [timeCorrectionMessage, setTimeCorrectionMessage] = useState<SafeMessage | null>(null);
+  const [isCreateEstimateModalOpen, setIsCreateEstimateModalOpen] = useState(false);
+  const [createEstimatePostToChatDefault, setCreateEstimatePostToChatDefault] = useState(true);
+
+  const handleOpenCreateEstimateModal = (postToChatDefault = true) => {
+    setCreateEstimatePostToChatDefault(postToChatDefault);
+    setIsCreateEstimateModalOpen(true);
+  };
 
   // Feature 1: Mark Project Complete dialog state
   const [isMarkCompleteDialogOpen, setIsMarkCompleteDialogOpen] = useState(false);
@@ -911,20 +919,28 @@ export const WorkspaceLayout: React.FC = () => {
   const handleCreateEstimateDraft = (
     pkgId: string | null,
     title: string,
-    items: Array<{ title: string; hours: number }>
+    items: Array<{ title: string; hours: number }>,
+    postToConversation: boolean = false
   ) => {
     let targetPkgId = pkgId;
+    let targetPkgTitle = title;
     if (!targetPkgId) {
       const newPkg: ScopePackage = {
         id: `pkg-${Date.now()}`,
         organization_id: 'org-1',
         project_id: selectedProjectId,
-        package_kind: packages.length === 0 ? 'initial' : 'additional',
+        package_kind: packages.some((p) => p.project_id === selectedProjectId) ? 'additional' : 'initial',
         title: title || 'Additional Work Scope',
         created_at: new Date().toISOString(),
       };
       setPackages((prev) => [...prev, newPkg]);
       targetPkgId = newPkg.id;
+      targetPkgTitle = newPkg.title;
+    } else {
+      const existing = packages.find((p) => p.id === targetPkgId);
+      if (existing) {
+        targetPkgTitle = existing.title;
+      }
     }
 
     const pkgExistingVersions = versions.filter((v) => v.scope_package_id === targetPkgId);
@@ -932,12 +948,13 @@ export const WorkspaceLayout: React.FC = () => {
     const totalHours = items.reduce((acc, it) => acc + (Number(it.hours) || 0), 0);
     const rateUsd = activeFinancials?.client_rate_usd_per_hour ?? null;
     const rateBdt = activeFinancials?.client_rate_bdt_per_hour ?? null;
+    const newVersionId = `ver-${Date.now()}`;
 
     const newVersion: ScopeVersion = {
-      id: `ver-${Date.now()}`,
+      id: newVersionId,
       scope_package_id: targetPkgId,
       version_number: verNumber,
-      status: 'draft',
+      status: postToConversation ? 'pending' : 'draft',
       revision_type: verNumber === 1 ? 'initial' : 'replacement',
       client_rate_usd_per_hour_snapshot: rateUsd,
       client_rate_bdt_per_hour_snapshot: rateBdt,
@@ -946,9 +963,10 @@ export const WorkspaceLayout: React.FC = () => {
       total_bdt_snapshot: rateBdt != null ? totalHours * rateBdt : null,
       created_at: new Date().toISOString(),
       event_at: new Date().toISOString(),
+      sent_at: postToConversation ? new Date().toISOString() : undefined,
       items: items.map((it, idx) => ({
         id: `item-${Date.now()}-${idx}`,
-        scope_version_id: `ver-${Date.now()}`,
+        scope_version_id: newVersionId,
         position: idx,
         title: it.title,
         hours: it.hours,
@@ -990,16 +1008,118 @@ export const WorkspaceLayout: React.FC = () => {
       });
     }
 
-    // Push notification for drafted estimate
-    notify({
-      title: `📝 New Estimate Scope Drafted: v${verNumber}.0`,
-      body: `${totalHours.toFixed(1)} billable hrs allocated across ${items.length} deliverables in ${activeProject?.name || 'Project'}.`,
-      category: 'estimate_status',
-      project_id: selectedProjectId,
-      project_name: activeProject?.name,
-      estimate_version_id: newVersion.id,
-      version_number: verNumber,
-    });
+    if (postToConversation) {
+      const hoursFormatted = totalHours.toFixed(2);
+      const activeConvId = activeProject ? `conv-${activeProject.id}` : 'conv-1';
+      const newMsg: SafeMessage = {
+        id: `msg-${Date.now()}`,
+        conversation_id: activeConvId,
+        project_id: activeProject?.id,
+        author_id: currentUser.user_id,
+        author_name: currentUser.display_name,
+        author_is_management: isSuperAdmin,
+        content_json: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: `📋 Estimate Scope v${newVersion.version_number}.0 (${hoursFormatted} hrs) has been sent to client. Management can review and approve directly from this thread.`,
+                },
+              ],
+            },
+          ],
+        },
+        event_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_edited: false,
+        is_deleted: false,
+        attachments: [],
+        estimate_version_id: newVersion.id,
+        estimate_card: {
+          version_id: newVersion.id,
+          package_title: targetPkgTitle,
+          version_number: newVersion.version_number,
+          total_hours: newVersion.total_hours_snapshot,
+          total_usd: newVersion.total_usd_snapshot,
+          total_bdt: newVersion.total_bdt_snapshot,
+          status: 'pending',
+          items: newVersion.items?.map((it) => ({ title: it.title, hours: it.hours })),
+        },
+      };
+      setMessages((prev) => [...prev, newMsg]);
+
+      // Push notification for estimate created and dispatched to conversation
+      notify({
+        title: `📤 Estimate Created & Sent: v${verNumber}.0`,
+        body: `${totalHours.toFixed(1)} billable hrs across ${items.length} deliverables in ${activeProject?.name || 'Project'}. Dispatched to chat for approval.`,
+        category: 'estimate_status',
+        project_id: selectedProjectId,
+        project_name: activeProject?.name,
+        estimate_version_id: newVersion.id,
+        version_number: verNumber,
+      });
+
+      // Record audit event
+      const auditEntry: AuditEvent = {
+        id: `audit-${Date.now()}`,
+        organization_id: 'org-1',
+        actor_user_id: currentUser.user_id,
+        actor_role_snapshot: currentRole,
+        entity_type: 'scope_versions',
+        entity_id: newVersion.id,
+        action: 'SEND_ESTIMATE_VERSION',
+        before_state: null,
+        after_state: {
+          status: 'pending',
+          package_title: targetPkgTitle,
+          total_hours: totalHours,
+          total_usd: newVersion.total_usd_snapshot,
+          total_bdt: newVersion.total_bdt_snapshot,
+        },
+        reason: 'Estimate created and dispatched to project conversation',
+        server_recorded_at: new Date().toISOString(),
+        source: 'ui',
+      };
+      setAuditEvents((a) => [auditEntry, ...a]);
+    } else {
+      // Push notification for drafted estimate
+      notify({
+        title: `📝 New Estimate Scope Drafted: v${verNumber}.0`,
+        body: `${totalHours.toFixed(1)} billable hrs allocated across ${items.length} deliverables in ${activeProject?.name || 'Project'}.`,
+        category: 'estimate_status',
+        project_id: selectedProjectId,
+        project_name: activeProject?.name,
+        estimate_version_id: newVersion.id,
+        version_number: verNumber,
+      });
+
+      // Record audit event for draft
+      const auditEntry: AuditEvent = {
+        id: `audit-${Date.now()}`,
+        organization_id: 'org-1',
+        actor_user_id: currentUser.user_id,
+        actor_role_snapshot: currentRole,
+        entity_type: 'scope_versions',
+        entity_id: newVersion.id,
+        action: 'CREATE_ESTIMATE_DRAFT',
+        before_state: null,
+        after_state: {
+          status: 'draft',
+          package_title: targetPkgTitle,
+          total_hours: totalHours,
+          total_usd: newVersion.total_usd_snapshot,
+          total_bdt: newVersion.total_bdt_snapshot,
+        },
+        reason: 'Estimate draft created in scope management',
+        server_recorded_at: new Date().toISOString(),
+        source: 'ui',
+      };
+      setAuditEvents((a) => [auditEntry, ...a]);
+    }
   };
 
   const handleSendEstimate = (versionId: string, email: string = '', postToConversation: boolean = true) => {
@@ -1086,7 +1206,7 @@ export const WorkspaceLayout: React.FC = () => {
           estimate_version_id: verSnapshot.id,
           estimate_card: {
             version_id: verSnapshot.id,
-            package_title: 'Core Project Scope',
+            package_title: packages.find((p) => p.id === verSnapshot.scope_package_id)?.title || 'Core Project Scope',
             version_number: verSnapshot.version_number,
             total_hours: verSnapshot.total_hours_snapshot,
             total_usd: verSnapshot.total_usd_snapshot,
@@ -2244,6 +2364,7 @@ export const WorkspaceLayout: React.FC = () => {
             financialSettings={activeFinancials}
             onUpdateFinancials={handleUpdateFinancials}
             onCreateEstimateDraft={handleCreateEstimateDraft}
+            onOpenCreateEstimateModal={() => handleOpenCreateEstimateModal(true)}
             onEditEstimate={handleEditEstimate}
             onDeleteEstimate={handleDeleteEstimate}
             onEditWorkOrder={handleEditWorkOrder}
@@ -2262,6 +2383,7 @@ export const WorkspaceLayout: React.FC = () => {
           client={activeClient}
           messages={activeMessages}
           versions={versions}
+          packages={packages}
           teamMembers={teamMembers}
           onSendMessage={handleSendMessage}
           onEditMessage={handleEditMessage}
@@ -2272,7 +2394,7 @@ export const WorkspaceLayout: React.FC = () => {
             if (v) setWorkOrderModalVersion(v);
           }}
           onOpenAuditConsole={() => setIsAuditModalOpen(true)}
-          onOpenEstimateDraftModal={() => handleCreateEstimateDraft(null, 'New Estimate Scope', [])}
+          onOpenEstimateDraftModal={() => handleOpenCreateEstimateModal(true)}
           onOpenCorrectTimeModal={(msg) => setTimeCorrectionMessage(msg)}
           onUpdateWorkOrderStatus={handleUpdateWorkOrderStatus}
         />
@@ -2301,6 +2423,7 @@ export const WorkspaceLayout: React.FC = () => {
             financialSettings={activeFinancials}
             onUpdateFinancials={handleUpdateFinancials}
             onCreateEstimateDraft={handleCreateEstimateDraft}
+            onOpenCreateEstimateModal={() => handleOpenCreateEstimateModal(true)}
             onEditEstimate={handleEditEstimate}
             onDeleteEstimate={handleDeleteEstimate}
             onEditWorkOrder={handleEditWorkOrder}
@@ -2320,6 +2443,7 @@ export const WorkspaceLayout: React.FC = () => {
             client={activeClient}
             messages={activeMessages}
             versions={versions}
+            packages={packages}
             teamMembers={teamMembers}
             onSendMessage={handleSendMessage}
             onEditMessage={handleEditMessage}
@@ -2330,7 +2454,7 @@ export const WorkspaceLayout: React.FC = () => {
               if (v) setWorkOrderModalVersion(v);
             }}
             onOpenAuditConsole={() => setIsAuditModalOpen(true)}
-            onOpenEstimateDraftModal={() => handleCreateEstimateDraft(null, 'New Estimate Scope', [])}
+            onOpenEstimateDraftModal={() => handleOpenCreateEstimateModal(true)}
             onOpenCorrectTimeModal={(msg) => setTimeCorrectionMessage(msg)}
             onUpdateWorkOrderStatus={handleUpdateWorkOrderStatus}
             onBackToProjects={() => setMobileTab('projects')}
@@ -2431,6 +2555,21 @@ export const WorkspaceLayout: React.FC = () => {
           isOpen={isAuditModalOpen}
           onClose={() => setIsAuditModalOpen(false)}
           auditEvents={auditEvents}
+        />
+      )}
+
+      {/* Instant Estimate Creation Modal (Opened from Chat or Scope buttons) */}
+      {activeProject && (
+        <CreateEstimateModal
+          isOpen={isCreateEstimateModalOpen}
+          onClose={() => setIsCreateEstimateModalOpen(false)}
+          packages={activePackages}
+          projectName={activeProject.name}
+          financialSettings={activeFinancials}
+          defaultPostToConversation={createEstimatePostToChatDefault}
+          onSubmit={({ pkgId, packageTitle, items, postToConversation }) => {
+            handleCreateEstimateDraft(pkgId, packageTitle, items, postToConversation);
+          }}
         />
       )}
 

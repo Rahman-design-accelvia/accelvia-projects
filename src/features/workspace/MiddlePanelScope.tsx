@@ -52,7 +52,8 @@ interface MiddlePanelScopeProps {
   workOrders: WorkOrder[];
   financialSettings?: ProjectFinancialSettings;
   onUpdateFinancials: (settings: Partial<ProjectFinancialSettings>) => void;
-  onCreateEstimateDraft: (pkgId: string | null, title: string, items: Array<{ title: string; hours: number }>) => void;
+  onCreateEstimateDraft: (pkgId: string | null, title: string, items: Array<{ title: string; hours: number }>, postToConversation?: boolean) => void;
+  onOpenCreateEstimateModal?: () => void;
   onEditEstimate?: (versionId: string, updatedPackageTitle: string, items: Array<{ title: string; hours: number }>) => void;
   onDeleteEstimate?: (versionId: string) => void;
   onEditWorkOrder?: (woId: string, items: Array<{ title: string; hours: number }>) => void;
@@ -79,6 +80,7 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
   financialSettings,
   onUpdateFinancials,
   onCreateEstimateDraft,
+  onOpenCreateEstimateModal,
   onEditEstimate,
   onDeleteEstimate,
   onEditWorkOrder,
@@ -182,7 +184,7 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
     }
 
     const pkgId = newEstimatePkgId === 'new' ? null : newEstimatePkgId;
-    onCreateEstimateDraft(pkgId, newEstimateTitle.trim(), validItems);
+    onCreateEstimateDraft(pkgId, newEstimateTitle.trim(), validItems, true);
     setIsNewEstimateModalOpen(false);
     setNewEstimateTitle('');
     setNewEstimateItems([{ title: '', hours: '' }]);
@@ -474,7 +476,7 @@ export const MiddlePanelScope: React.FC<MiddlePanelScopeProps> = ({
                 </span>
                 <button
                   type="button"
-                  onClick={handleOpenNewEstimateModal}
+                  onClick={onOpenCreateEstimateModal || handleOpenNewEstimateModal}
                   className="px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1 transition shadow-xs cursor-pointer"
                   style={{
                     backgroundColor: 'var(--theme-accent-subtle)',

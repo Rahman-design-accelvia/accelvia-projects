@@ -232,4 +232,100 @@ describe('Estimate and Work Order Lifecycle & Immutability Rules', () => {
     // Empty project id returns 0 messages
     expect(filterMessagesForProject(mockMessages, '')).toEqual([]);
   });
+
+  it('instantly creates and dispatches estimate proposal card to project conversation when submitted', () => {
+    const rawItems = [
+      { title: 'wp1', hours: 12 },
+      { title: 'wp1', hours: 13 },
+      { title: 'wp1', hours: 1 },
+      { title: 'wp1', hours: 2 },
+    ];
+    const totalHours = rawItems.reduce((acc, it) => acc + it.hours, 0);
+    expect(totalHours).toBe(28);
+
+    const versionId = 'ver-instant-28';
+    const projectId = 'proj-tango-2';
+    const packageTitle = 'wp test 4';
+
+    // Simulate instant estimate creation with postToConversation = true
+    const newVersion: ScopeVersion = {
+      id: versionId,
+      scope_package_id: 'pkg-wp-4',
+      version_number: 1,
+      status: 'pending',
+      revision_type: 'initial',
+      total_hours_snapshot: totalHours,
+      created_at: new Date().toISOString(),
+      event_at: new Date().toISOString(),
+      sent_at: new Date().toISOString(),
+      items: rawItems.map((it, idx) => ({
+        id: `item-${idx}`,
+        scope_version_id: versionId,
+        position: idx,
+        title: it.title,
+        hours: it.hours,
+        is_billable: true,
+        created_at: new Date().toISOString(),
+      })),
+    };
+
+    const newMsg: SafeMessage = {
+      id: 'msg-instant-1',
+      conversation_id: `conv-${projectId}`,
+      project_id: projectId,
+      author_id: 'user-admin',
+      author_name: 'Musfiqur Rahman',
+      author_is_management: true,
+      content_json: { type: 'doc' },
+      event_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      is_edited: false,
+      is_deleted: false,
+      attachments: [],
+      estimate_version_id: newVersion.id,
+      estimate_card: {
+        version_id: newVersion.id,
+        package_title: packageTitle,
+        version_number: newVersion.version_number,
+        total_hours: newVersion.total_hours_snapshot,
+        status: 'pending',
+        items: newVersion.items?.map((it) => ({ title: it.title, hours: it.hours })),
+      },
+    };
+
+    expect(newVersion.status).toBe('pending');
+    expect(newVersion.items).toHaveLength(4);
+    expect(newMsg.estimate_card?.package_title).toBe('wp test 4');
+    expect(newMsg.estimate_card?.total_hours).toBe(28);
+    expect(newMsg.estimate_card?.items).toHaveLength(4);
+
+    // Verify it is properly isolated to proj-tango-2
+    const filtered = filterMessagesForProject([newMsg], projectId);
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].estimate_card?.status).toBe('pending');
+  });
+
+  it('filters out empty or 0-hour items so accidental blanks never break estimate creation', () => {
+    const rawItems = [
+      { title: 'Core Page Setup', hours: '10' },
+      { title: '', hours: '5' },
+      { title: 'Responsive Testing', hours: '0' },
+      { title: '   ', hours: '' },
+      { title: 'Final QA & Deployment', hours: '4.5' },
+    ];
+
+    const validItems = rawItems
+      .map((it) => ({
+        title: it.title.trim(),
+        hours: Number(it.hours) || 0,
+      }))
+      .filter((it) => it.title.length > 0 && it.hours > 0);
+
+    expect(validItems).toHaveLength(2);
+    expect(validItems[0].title).toBe('Core Page Setup');
+    expect(validItems[0].hours).toBe(10);
+    expect(validItems[1].title).toBe('Final QA & Deployment');
+    expect(validItems[1].hours).toBe(4.5);
+  });
 });

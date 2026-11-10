@@ -1,8 +1,8 @@
 // src/features/workspace/RightPanelConversation.tsx
 // Right Panel: Project Primary Conversation with rich-text, attachments, dual-time, and Super Admin masking
 
-import React, { useState, useMemo } from 'react';
-import { Project, Client, SafeMessage, ScopeVersion, VoiceNoteData } from '../../types';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { Project, Client, SafeMessage, ScopeVersion, ScopePackage, VoiceNoteData } from '../../types';
 import { useAuth, TeamMember } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
 import { RichTextEditor } from '../conversations/RichTextEditor';
@@ -33,6 +33,7 @@ interface RightPanelConversationProps {
   client?: Client | null;
   messages: SafeMessage[];
   versions: ScopeVersion[];
+  packages?: ScopePackage[];
   teamMembers?: TeamMember[];
   onSendMessage: (contentJson: Record<string, unknown>, attachments: File[], voiceNote?: VoiceNoteData | null) => void;
   onEditMessage: (messageId: string, newText: string) => void;
@@ -51,6 +52,7 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
   client,
   messages,
   versions,
+  packages = [],
   teamMembers,
   onSendMessage,
   onEditMessage,
@@ -66,6 +68,12 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
   const { currentUser, isSuperAdmin, isMember, canViewMoney, teamMembers: contextTeamMembers } = useAuth();
   const { accentColor } = useTheme();
   const activeTeamMembers = teamMembers || contextTeamMembers || [];
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to latest message or interactive estimate card
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages.length]);
 
   const mentionCandidates: MentionCandidate[] = useMemo(() => {
     return activeTeamMembers.map((m) => ({
@@ -199,10 +207,10 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
           {canViewMoney && (
             <button
               onClick={onOpenEstimateDraftModal}
-              className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-teal-500/10 dark:hover:bg-teal-500/20 dark:text-teal-300 dark:border-teal-500/30 text-xs font-semibold flex items-center gap-1 sm:gap-1.5 transition"
+              className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-teal-500/10 dark:hover:bg-teal-500/20 dark:text-teal-300 dark:border-teal-500/30 text-xs font-semibold flex items-center gap-1 sm:gap-1.5 transition shadow-xs cursor-pointer"
               title="Create new scope estimate"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 dark:text-teal-400" />
               <span className="hidden sm:inline">Create Estimate</span>
               <span className="sm:hidden text-[11px]">Estimate</span>
             </button>
@@ -369,7 +377,11 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
                       return (
                         <EstimateConversationCard
                           version={cardData as ScopeVersion}
-                          packageTitle={msg.estimate_card?.package_title || 'Core Project Scope'}
+                          packageTitle={
+                            msg.estimate_card?.package_title ||
+                            (matchedVersion ? packages.find((p) => p.id === matchedVersion.scope_package_id)?.title : undefined) ||
+                            'Core Project Scope'
+                          }
                           onApprove={onApproveEstimate}
                           onGenerateWorkOrder={onGenerateWorkOrder}
                         />
@@ -410,6 +422,7 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
             );
           })
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Message Input Composer */}
