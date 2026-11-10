@@ -362,3 +362,93 @@ export interface ToastNotification extends AppNotification {
   dismissed?: boolean;
 }
 
+// ============================================================================
+// TASK 1: COMPANY NAME MANAGEMENT & AUDIT DOMAIN TYPES
+// ============================================================================
+
+export type CompanyNameRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface CompanyNameRequest {
+  id: string;
+  proposed_name: string;
+  requested_by_id: string;
+  requested_by_name: string;
+  requested_by_email: string;
+  requested_by_role: UserRole;
+  status: CompanyNameRequestStatus;
+  submitted_at: string;
+  reviewed_by_id?: string;
+  reviewed_by_name?: string;
+  reviewed_by_role?: UserRole;
+  reviewed_at?: string;
+  review_notes?: string;
+}
+
+export type CompanyNameActionType =
+  | 'submit_request'
+  | 'approve_request'
+  | 'reject_request'
+  | 'direct_update'
+  | 'edit_request'
+  | 'delete_request';
+
+export interface CompanyNameAuditRecord {
+  id: string;
+  action: CompanyNameActionType;
+  previous_name: string;
+  new_name: string;
+  performed_by_id: string;
+  performed_by_name: string;
+  performed_by_role: UserRole;
+  target_request_id?: string;
+  timestamp: string;
+  details?: string;
+}
+
+// ============================================================================
+// TASK 2: PASSWORD MANAGEMENT & FORGOT PASSWORD DOMAIN TYPES
+// ============================================================================
+
+export type PasswordRequestType = 'forgot_password' | 'change_password';
+export type PasswordRequestStatus = 'pending' | 'approved' | 'rejected' | 'completed';
+
+export interface PasswordResetRequest {
+  id: string;
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  user_role: UserRole;
+  request_type: PasswordRequestType;
+  status: PasswordRequestStatus;
+  submitted_at: string;
+  reviewed_by_id?: string;
+  reviewed_by_name?: string;
+  reviewed_by_role?: UserRole;
+  reviewed_at?: string;
+  completed_at?: string;
+  temporary_password_issued?: boolean;
+  notes?: string;
+}
+
+export type PasswordAuditAction =
+  | 'request_submitted'
+  | 'request_approved'
+  | 'request_rejected'
+  | 'temporary_password_generated'
+  | 'password_reset_direct'
+  | 'password_changed'
+  | 'session_revoked';
+
+export interface PasswordAuditRecord {
+  id: string;
+  action: PasswordAuditAction;
+  target_user_id: string;
+  target_user_email: string;
+  performed_by_id: string;
+  performed_by_name: string;
+  performed_by_role: UserRole;
+  timestamp: string;
+  details?: string;
+}
+
+

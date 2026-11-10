@@ -1,10 +1,12 @@
 // src/features/auth/TeamManagementModal.tsx
 // Super Admin Team Roster, Role Assignment Console & User Registration Approval Workflow
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Modal } from '../../components/Modal';
 import { useAuth, TeamMember } from './AuthContext';
-import { UserRole } from '../../types';
+import { UserRole, PasswordResetRequest } from '../../types';
+import { canApprovePasswordResetRequest } from '../../lib/auth/authorization';
+import { validatePasswordStrength } from '../../lib/auth/password-crypto';
 import { 
   UserPlus, 
   Trash2, 
@@ -48,15 +50,23 @@ export const TeamManagementModal: React.FC<TeamManagementModalProps> = ({ isOpen
     isSuperAdmin,
     isAdmin,
     currentUser,
+    currentRole,
     designationRequests,
     pendingDesignationRequests,
     approveDesignationRequest,
     rejectDesignationRequest,
-    superAdminUpdateUserDesignation
+    superAdminUpdateUserDesignation,
+    passwordResetRequests,
+    pendingPasswordRequests,
+    passwordAuditHistory,
+    approvePasswordResetRequest,
+    rejectPasswordResetRequest,
+    superAdminResetUserPassword,
   } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'roster' | 'pending' | 'add'>('roster');
+  const [activeTab, setActiveTab] = useState<'roster' | 'pending' | 'passwords' | 'add'>('roster');
   const [pendingSubTab, setPendingSubTab] = useState<'registrations' | 'designations'>('registrations');
+  const [passwordTabSubTab, setPasswordTabSubTab] = useState<'pending' | 'audit'>('pending');
 
   // Super Admin direct designation editing in roster
   const [editingDesignationUserId, setEditingDesignationUserId] = useState<string | null>(null);
@@ -70,16 +80,23 @@ export const TeamManagementModal: React.FC<TeamManagementModalProps> = ({ isOpen
   const [showPasswordInput, setShowPasswordInput] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
-  // Password reveal toggle state per user (Super Admin only)
-  const [revealedPasswords, setRevealedPasswords] = useState<Record<string, boolean>>({});
+  // Administrative Reset Dialog State
+  const [resetTargetUser, setResetTargetUser] = useState<TeamMember | null>(null);
+  const [isCustomTempPassword, setIsCustomTempPassword] = useState(false);
+  const [customTempPasswordInput, setCustomTempPasswordInput] = useState('');
+  const [showCustomPassword, setShowCustomPassword] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [resetPasswordError, setResetPasswordError] = useState<string | null>(null);
 
-  // Super Admin Password Edit Modal state
-  const [editingUser, setEditingUser] = useState<TeamMember | null>(null);
-  const [newPasswordInput, setNewPasswordInput] = useState('');
-  const [showEditPasswordInput, setShowEditPasswordInput] = useState(false);
-  const [passwordModalError, setPasswordModalError] = useState<string | null>(null);
-  const [passwordModalSuccess, setPasswordModalSuccess] = useState<string | null>(null);
-  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  // One-Time Temporary Password Display Modal state
+  const [temporaryPasswordModal, setTemporaryPasswordModal] = useState<{
+    isOpen: boolean;
+    temporaryPassword: string;
+    userName: string;
+    userEmail: string;
+  } | null>(null);
+  const [hasCopiedTempPassword, setHasCopiedTempPassword] = useState(false);
+  const [isActionPending, setIsActionPending] = useState(false);
 
   // Super Admin Account Deletion Warning Modal state
   const [memberToDelete, setMemberToDelete] = useState<TeamMember | null>(null);
@@ -100,48 +117,90 @@ export const TeamManagementModal: React.FC<TeamManagementModalProps> = ({ isOpen
     }
   };
 
-  const togglePasswordReveal = (userId: string) => {
-    setRevealedPasswords((prev) => ({ ...prev, [userId]: !prev[userId] }));
+  const handleOpenResetDialog = (member: TeamMember) => {
+    setResetTargetUser(member);
+    setIsCustomTempPassword(false);
+    setCustomTempPasswordInput('');
+    setResetPasswordError(null);
   };
 
-  const handleOpenEditPassword = (member: TeamMember) => {
-    setEditingUser(member);
-    setNewPasswordInput(member.password || 'Password123!');
-    setShowEditPasswordInput(false);
-    setPasswordModalError(null);
-    setPasswordModalSuccess(null);
-  };
-
-  const generateRandomEditPassword = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
-    let res = '';
-    for (let i = 0; i < 10; i++) {
-      res += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    setNewPasswordInput(res);
-  };
-
-  const handleSaveUpdatedPassword = async (e: React.FormEvent) => {
+  const handleConfirmDirectReset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingUser) return;
-    if (!newPasswordInput.trim() || newPasswordInput.trim().length < 6) {
-      setPasswordModalError('Password must be at least 6 characters.');
-      return;
+    if (!resetTargetUser) return;
+
+    if (isCustomTempPassword) {
+      const strength = validatePasswordStrength(customTempPasswordInput);
+      if (!strength.valid) {
+        setResetPasswordError(strength.error || 'Password does not meet complexity requirements.');
+        return;
+      }
     }
 
-    setIsUpdatingPassword(true);
-    setPasswordModalError(null);
-    const res = await updateUserPassword(editingUser.user_id, newPasswordInput.trim());
-    setIsUpdatingPassword(false);
+    setIsResettingPassword(true);
+    setResetPasswordError(null);
+
+    const res = await superAdminResetUserPassword(
+      resetTargetUser.user_id,
+      isCustomTempPassword ? customTempPasswordInput.trim() : undefined
+    );
+
+    setIsResettingPassword(false);
 
     if (!res.success) {
-      setPasswordModalError(res.error || 'Failed to update password');
+      setResetPasswordError(res.error || 'Failed to reset password.');
     } else {
-      setPasswordModalSuccess(`Password updated successfully for ${editingUser.display_name}!`);
-      setTimeout(() => {
-        setEditingUser(null);
-      }, 1200);
+      const target = resetTargetUser;
+      setResetTargetUser(null);
+      setTemporaryPasswordModal({
+        isOpen: true,
+        temporaryPassword: res.temporaryPassword || '',
+        userName: target.display_name,
+        userEmail: target.email,
+      });
+      setHasCopiedTempPassword(false);
     }
+  };
+
+  const handleApproveRequest = async (req: PasswordResetRequest) => {
+    setIsActionPending(true);
+    const res = await approvePasswordResetRequest(req.id);
+    setIsActionPending(false);
+
+    if (!res.success) {
+      setActionNotice(`Error: ${res.error}`);
+      setTimeout(() => setActionNotice(null), 4000);
+    } else {
+      setTemporaryPasswordModal({
+        isOpen: true,
+        temporaryPassword: res.temporaryPassword || '',
+        userName: req.user_name,
+        userEmail: req.user_email,
+      });
+      setHasCopiedTempPassword(false);
+    }
+  };
+
+  const handleRejectRequestPrompt = async (req: PasswordResetRequest) => {
+    const reason = prompt(`Reason for rejecting password request for ${req.user_name} (optional):`);
+    if (reason === null) return;
+
+    setIsActionPending(true);
+    const res = await rejectPasswordResetRequest(req.id, reason || undefined);
+    setIsActionPending(false);
+
+    if (!res.success) {
+      setActionNotice(`Error: ${res.error}`);
+    } else {
+      setActionNotice(`Rejected password request for ${req.user_name}.`);
+    }
+    setTimeout(() => setActionNotice(null), 4000);
+  };
+
+  const handleCopyTempPassword = () => {
+    if (!temporaryPasswordModal?.temporaryPassword) return;
+    navigator.clipboard.writeText(temporaryPasswordModal.temporaryPassword);
+    setHasCopiedTempPassword(true);
+    setTimeout(() => setHasCopiedTempPassword(false), 3000);
   };
 
   // Approval action toast state
@@ -193,9 +252,8 @@ export const TeamManagementModal: React.FC<TeamManagementModalProps> = ({ isOpen
     setPassword('Password123!');
   };
 
-  const copyCredentialsText = (member: { name?: string; display_name?: string; email: string; role: string; password?: string }) => {
+  const copyCredentialsText = (member: { name?: string; display_name?: string; email: string; role: string }) => {
     const loginUrl = typeof window !== 'undefined' ? window.location.origin : 'https://accelvia-projects.vercel.app';
-    const pwd = member.password || 'Password123!';
     const memberName = member.name || member.display_name || 'Team Member';
 
     const text = `Welcome to Accelvia Work Management Platform!
@@ -205,7 +263,6 @@ Your account details:
 - Role: ${member.role.toUpperCase()}
 - Login URL: ${loginUrl}
 - Email: ${member.email}
-${isSuperAdmin ? `- Password: ${pwd}` : ''}
 
 (If you use Gmail, you can also log in directly by clicking "Sign in with Google" with this email!)`;
 
@@ -277,6 +334,27 @@ ${isSuperAdmin ? `- Password: ${pwd}` : ''}
 
   const totalPendingCount = visiblePending.length + pendingDesignationRequests.length;
 
+  // Filter password reset requests based on role authority
+  const visiblePasswordRequests = useMemo(() => {
+    return passwordResetRequests.filter((req) => {
+      if (req.status !== 'pending') return false;
+      if (isSuperAdmin) return true;
+      if (isAdmin) {
+        // Admin can only view and process Member password requests
+        return req.user_role === 'member';
+      }
+      return false;
+    });
+  }, [passwordResetRequests, isSuperAdmin, isAdmin]);
+
+  const visiblePasswordAudit = useMemo(() => {
+    if (isSuperAdmin) return passwordAuditHistory;
+    if (isAdmin) {
+      return passwordAuditHistory.filter((a) => a.performed_by_role === 'admin' || a.performed_by_role === 'member');
+    }
+    return [];
+  }, [passwordAuditHistory, isSuperAdmin, isAdmin]);
+
   return (
     <>
     <Modal
@@ -293,7 +371,7 @@ ${isSuperAdmin ? `- Password: ${pwd}` : ''}
       <div className="space-y-4 text-xs text-slate-800 dark:text-slate-200">
         
         {/* Navigation Tabs */}
-        <div className="flex border-b border-slate-200 dark:border-slate-800 gap-1 pb-1">
+        <div className="flex border-b border-slate-200 dark:border-slate-800 gap-1 pb-1 flex-wrap">
           <button
             type="button"
             onClick={() => setActiveTab('roster')}
@@ -325,6 +403,24 @@ ${isSuperAdmin ? `- Password: ${pwd}` : ''}
             {totalPendingCount > 0 && (
               <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-rose-500 text-white font-mono animate-pulse">
                 {totalPendingCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('passwords')}
+            className={`py-2 px-3 text-xs font-bold rounded-lg transition flex items-center gap-1.5 ${
+              activeTab === 'passwords'
+                ? 'bg-amber-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <Key className="w-3.5 h-3.5" />
+            <span>Password Requests</span>
+            {visiblePasswordRequests.length > 0 && (
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-rose-500 text-white font-mono animate-pulse">
+                {visiblePasswordRequests.length}
               </span>
             )}
           </button>
@@ -685,47 +781,31 @@ ${isSuperAdmin ? `- Password: ${pwd}` : ''}
                         )}
                       </td>
                       <td className="py-2.5 px-3">
-                        {isSuperAdmin ? (
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono text-[11px] font-semibold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 min-w-[70px] inline-block text-center">
-                              {revealedPasswords[member.user_id]
-                                ? (member.password || 'Password123!')
-                                : '••••••••'}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {member.must_change_password ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 dark:bg-amber-950/70 border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300">
+                              <Clock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                              <span>Temp Password</span>
                             </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300">
+                              <ShieldCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                              <span>Protected (PBKDF2)</span>
+                            </span>
+                          )}
+
+                          {isSuperAdmin && (
                             <button
                               type="button"
-                              onClick={() => togglePasswordReveal(member.user_id)}
-                              className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition"
-                              title={revealedPasswords[member.user_id] ? "Hide password" : "Show password"}
-                            >
-                              {revealedPasswords[member.user_id] ? (
-                                <EyeOff className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                              ) : (
-                                <Eye className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenEditPassword(member)}
+                              onClick={() => handleOpenResetDialog(member)}
                               className="px-2 py-0.5 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-[10px] font-bold flex items-center gap-1 transition shadow-xs"
-                              title={`Edit and update password for ${member.display_name}`}
+                              title={`Reset password for ${member.display_name}`}
                             >
                               <Key className="w-3 h-3 text-amber-600 dark:text-amber-400" />
-                              <span>Edit</span>
+                              <span>Reset</span>
                             </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700/80 flex items-center gap-1.5">
-                              <Lock className="w-3 h-3 text-slate-400 dark:text-slate-500" />
-                              <span>••••••••</span>
-                            </span>
-                            <span className="text-[10px] text-emerald-600 dark:text-teal-400 font-semibold flex items-center gap-1">
-                              <ShieldCheck className="w-3 h-3" />
-                              <span>Protected</span>
-                            </span>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </td>
                       <td className="py-2.5 px-3 text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -738,7 +818,7 @@ ${isSuperAdmin ? `- Password: ${pwd}` : ''}
                                 setTimeout(() => setCopiedIndex(null), 2000);
                               }}
                               className="p-1 rounded text-slate-400 hover:text-emerald-600 transition"
-                              title="Copy full credentials with password"
+                              title="Copy account invitation"
                             >
                               {copiedIndex === idx ? (
                                 <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -788,6 +868,196 @@ ${isSuperAdmin ? `- Password: ${pwd}` : ''}
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {/* ================================================================= */}
+        {/* TAB: PASSWORD REQUESTS & AUDIT CONSOLE                            */}
+        {/* ================================================================= */}
+        {activeTab === 'passwords' && (
+          <div className="space-y-4">
+            {/* Sub-tabs toggle */}
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPasswordTabSubTab('pending')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                    passwordTabSubTab === 'pending'
+                      ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Pending Requests</span>
+                  {visiblePasswordRequests.length > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-rose-500 text-white font-mono">
+                      {visiblePasswordRequests.length}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPasswordTabSubTab('audit')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                    passwordTabSubTab === 'audit'
+                      ? 'bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Audit Trail</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 dark:bg-slate-700 font-mono">
+                    {visiblePasswordAudit.length}
+                  </span>
+                </button>
+              </div>
+
+              <div className="text-[11px] text-slate-500">
+                {isSuperAdmin ? 'Super Admin Master Authority' : 'Admin: Member Access Management'}
+              </div>
+            </div>
+
+            {/* Sub-tab 1: Pending Requests */}
+            {passwordTabSubTab === 'pending' && (
+              <div className="space-y-3">
+                {visiblePasswordRequests.length === 0 ? (
+                  <div className="text-center py-10 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
+                    <ShieldCheck className="w-8 h-8 text-emerald-500 mx-auto opacity-75" />
+                    <div className="font-semibold text-slate-700 dark:text-slate-300">
+                      No Pending Password Requests
+                    </div>
+                    <p className="text-slate-500 text-[11px] max-w-sm mx-auto">
+                      All password change requests and forgot password submissions have been processed.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {visiblePasswordRequests.map((req) => {
+                      const isSelf = req.user_id === currentUser.user_id;
+                      const canApprove = !isSelf && canApprovePasswordResetRequest(currentRole, req.user_role, req.user_id, currentUser.user_id);
+
+                      return (
+                        <div
+                          key={req.id}
+                          className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 transition space-y-2.5 shadow-xs"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-900 dark:text-slate-100 text-xs">
+                                {req.user_name}
+                              </span>
+                              <span className="font-mono text-slate-500 text-[11px]">
+                                ({req.user_email})
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                  req.user_role === 'admin'
+                                    ? 'bg-emerald-100 dark:bg-teal-950/80 text-emerald-800 dark:text-teal-300 border border-emerald-300 dark:border-teal-800'
+                                    : 'bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-800'
+                                }`}
+                              >
+                                {req.user_role}
+                              </span>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                                {req.request_type === 'forgot_password' ? 'Forgot Password' : 'Change Password'}
+                              </span>
+                            </div>
+
+                            <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              <span>{new Date(req.submitted_at).toLocaleString()}</span>
+                            </div>
+                          </div>
+
+                          {req.notes && (
+                            <div className="text-[11px] bg-slate-50 dark:bg-slate-950/60 p-2 rounded-lg border border-slate-200 dark:border-slate-800/60 text-slate-600 dark:text-slate-300">
+                              <span className="font-semibold text-slate-700 dark:text-slate-200">Applicant note: </span>
+                              {req.notes}
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800/60">
+                            <div className="text-[10px] text-slate-500">
+                              {isSelf ? (
+                                <span className="text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1">
+                                  <ShieldAlert className="w-3 h-3" />
+                                  <span>Self-approval restricted. Another administrator must review your request.</span>
+                                </span>
+                              ) : (
+                                <span>Approving will generate a temporary password & revoke all active sessions.</span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                disabled={!canApprove || isActionPending}
+                                onClick={() => handleApproveRequest(req)}
+                                className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-xs flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Approve & Issue Temp Password</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={!canApprove || isActionPending}
+                                onClick={() => handleRejectRequestPrompt(req)}
+                                className="px-3 py-1 rounded-lg border border-rose-300 dark:border-rose-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Sub-tab 2: Audit Trail */}
+            {passwordTabSubTab === 'audit' && (
+              <div className="space-y-2">
+                {visiblePasswordAudit.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500 text-xs">
+                    No password audit records yet.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-200 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+                    {visiblePasswordAudit.map((record) => (
+                      <div key={record.id} className="p-3 flex items-start justify-between gap-3 text-xs">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-[10px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-semibold uppercase">
+                              {record.action.replace(/_/g, ' ')}
+                            </span>
+                            <span className="font-semibold text-slate-900 dark:text-slate-100">
+                              {record.target_user_email}
+                            </span>
+                          </div>
+                          {record.details && (
+                            <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                              {record.details}
+                            </p>
+                          )}
+                          <div className="text-[10px] text-slate-400">
+                            By {record.performed_by_name} ({record.performed_by_role})
+                          </div>
+                        </div>
+
+                        <div className="text-[10px] text-slate-400 font-mono shrink-0">
+                          {new Date(record.timestamp).toLocaleString()}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -971,100 +1241,206 @@ ${isSuperAdmin ? `- Password: ${pwd}` : ''}
       </div>
     </Modal>
 
-    {/* Super Admin: Edit and Update User Password Modal */}
-    {editingUser && (
+    {/* Direct Administrative Password Reset Modal */}
+    {resetTargetUser && (
       <Modal
-        isOpen={true}
-        onClose={() => setEditingUser(null)}
-        title="Edit & Update User Password"
-        subtitle={`Assign a new password for ${editingUser.display_name} (${editingUser.email})`}
+        isOpen={Boolean(resetTargetUser)}
+        onClose={() => setResetTargetUser(null)}
+        title="Direct Administrative Password Reset"
+        subtitle={`Reset credentials and revoke active sessions for ${resetTargetUser.display_name}`}
+        maxWidth="md"
       >
-        <form onSubmit={handleSaveUpdatedPassword} className="space-y-4">
-          {passwordModalError && (
+        <form onSubmit={handleConfirmDirectReset} className="space-y-4 text-xs">
+          {resetPasswordError && (
             <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
               <ShieldAlert className="w-4 h-4 shrink-0" />
-              <span>{passwordModalError}</span>
+              <span>{resetPasswordError}</span>
             </div>
           )}
 
-          {passwordModalSuccess && (
-            <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>{passwordModalSuccess}</span>
-            </div>
-          )}
-
-          <div className="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1.5 text-xs">
+          <div className="bg-slate-50 dark:bg-slate-900/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-slate-500 text-[10px] uppercase font-semibold">User Account:</span>
-              <span className="font-bold text-slate-800 dark:text-slate-200">{editingUser.display_name}</span>
+              <span className="text-slate-500 text-[10px] uppercase font-semibold">Target Account:</span>
+              <span className="font-bold text-slate-900 dark:text-slate-100">{resetTargetUser.display_name}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-500 text-[10px] uppercase font-semibold">Email:</span>
-              <span className="font-mono text-slate-600 dark:text-slate-400">{editingUser.email}</span>
+              <span className="font-mono text-slate-700 dark:text-slate-300">{resetTargetUser.email}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-500 text-[10px] uppercase font-semibold">Current Password:</span>
-              <span className="font-mono text-slate-700 dark:text-slate-300 bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded text-[11px]">
-                {editingUser.password || 'Password123!'}
-              </span>
+              <span className="text-slate-500 text-[10px] uppercase font-semibold">Role:</span>
+              <span className="font-semibold text-slate-900 dark:text-slate-100 uppercase">{resetTargetUser.role}</span>
             </div>
           </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                New Password
-              </label>
-              <button
-                type="button"
-                onClick={generateRandomEditPassword}
-                className="text-[11px] text-emerald-600 dark:text-teal-400 hover:underline flex items-center gap-1"
-              >
-                <Sparkles className="w-3 h-3" />
-                <span>Generate Random</span>
-              </button>
+          <div className="p-3.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 space-y-1.5 text-slate-700 dark:text-slate-300">
+            <div className="font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+              <ShieldAlert className="w-3.5 h-3.5" />
+              <span>Security & Session Revocation Notice</span>
             </div>
-            <div className="relative">
-              <input
-                type={showEditPasswordInput ? 'text' : 'password'}
-                required
-                value={newPasswordInput}
-                onChange={(e) => setNewPasswordInput(e.target.value)}
-                placeholder="Min 6 characters"
-                className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg pl-3 pr-10 py-2 text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 dark:focus:border-teal-500"
-              />
-              <button
-                type="button"
-                onClick={() => setShowEditPasswordInput(!showEditPasswordInput)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-              >
-                {showEditPasswordInput ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-            <p className="text-[10px] text-slate-500 mt-1">
-              Super Admin Master Authority: This updates the database password instantly. The user will log in with this new password.
+            <p className="text-[11px] leading-relaxed">
+              Resetting this password will <strong>immediately invalidate the user's previous password</strong> and terminate all active sessions across desktop browsers and mobile PWA devices. The user will be required to create a new password on first login.
             </p>
+          </div>
+
+          <div className="space-y-3 pt-1">
+            <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+              Temporary Password Generation Method
+            </label>
+
+            <div className="space-y-2">
+              <label className="flex items-start gap-2.5 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer">
+                <input
+                  type="radio"
+                  name="tempPwdOption"
+                  checked={!isCustomTempPassword}
+                  onChange={() => setIsCustomTempPassword(false)}
+                  className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
+                />
+                <div>
+                  <div className="font-semibold text-slate-900 dark:text-slate-100">
+                    Auto-generate secure temporary password (Recommended)
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    Generates a cryptographically strong 12-character random string with uppercase, lowercase, numbers, and symbols.
+                  </div>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-2.5 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer">
+                <input
+                  type="radio"
+                  name="tempPwdOption"
+                  checked={isCustomTempPassword}
+                  onChange={() => setIsCustomTempPassword(true)}
+                  className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
+                />
+                <div className="flex-1">
+                  <div className="font-semibold text-slate-900 dark:text-slate-100">
+                    Specify custom temporary password
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    Enter an initial temporary password that adheres to enterprise complexity rules.
+                  </div>
+
+                  {isCustomTempPassword && (
+                    <div className="mt-2 relative">
+                      <input
+                        type={showCustomPassword ? 'text' : 'password'}
+                        value={customTempPasswordInput}
+                        onChange={(e) => setCustomTempPasswordInput(e.target.value)}
+                        placeholder="Min 6 characters"
+                        className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg pl-3 pr-10 py-1.5 text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCustomPassword(!showCustomPassword)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        {showCustomPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </label>
+            </div>
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
             <button
               type="button"
-              onClick={() => setEditingUser(null)}
+              onClick={() => setResetTargetUser(null)}
               className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isUpdatingPassword}
-              className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow-xs disabled:opacity-50"
+              disabled={isResettingPassword}
+              className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow-xs disabled:opacity-50"
             >
-              <Check className="w-3.5 h-3.5" />
-              <span>{isUpdatingPassword ? 'Saving...' : 'Update Password'}</span>
+              <Key className="w-3.5 h-3.5" />
+              <span>{isResettingPassword ? 'Generating...' : 'Confirm & Generate Temp Password'}</span>
             </button>
           </div>
         </form>
+      </Modal>
+    )}
+
+    {/* One-Time Temporary Password Display Modal */}
+    {temporaryPasswordModal && (
+      <Modal
+        isOpen={temporaryPasswordModal.isOpen}
+        onClose={() => setTemporaryPasswordModal(null)}
+        title="Temporary Password Generated"
+        subtitle="One-time administrative credential delivery"
+        maxWidth="md"
+      >
+        <div className="space-y-4 text-xs">
+          <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 space-y-1.5">
+            <div className="font-bold flex items-center gap-1.5 text-xs text-amber-800 dark:text-amber-300">
+              <ShieldAlert className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <span>Critical Security Notice (Google L5 Standard)</span>
+            </div>
+            <p className="text-[11px] leading-relaxed">
+              This temporary password is displayed <strong>ONLY ONCE</strong> and cannot be viewed again. It has already been cryptographically hashed and salted with PBKDF2 in the central database. Copy it now and deliver it securely to the user.
+            </p>
+          </div>
+
+          {/* User Details */}
+          <div className="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200 dark:border-slate-800 text-xs space-y-1">
+            <div className="flex justify-between">
+              <span className="text-slate-500">User:</span>
+              <span className="font-bold text-slate-900 dark:text-slate-100">{temporaryPasswordModal.userName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Email:</span>
+              <span className="font-mono text-slate-700 dark:text-slate-300">{temporaryPasswordModal.userEmail}</span>
+            </div>
+          </div>
+
+          {/* Large Password Display Box */}
+          <div className="p-4 rounded-xl bg-slate-900 dark:bg-black border border-slate-700 dark:border-slate-800 text-center space-y-2">
+            <div className="text-[10px] uppercase font-mono tracking-wider text-slate-400">
+              One-Time Temporary Password
+            </div>
+            <div className="text-xl sm:text-2xl font-mono font-bold tracking-widest text-emerald-400 select-all py-1">
+              {temporaryPasswordModal.temporaryPassword}
+            </div>
+            <div className="text-[10px] text-slate-400">
+              User must set a new permanent password on next sign in.
+            </div>
+          </div>
+
+          {/* Copy Button */}
+          <button
+            type="button"
+            onClick={handleCopyTempPassword}
+            className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition shadow-md shadow-emerald-600/20"
+          >
+            {hasCopiedTempPassword ? (
+              <>
+                <Check className="w-4 h-4 text-white" />
+                <span>Copied to Clipboard!</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-4 h-4" />
+                <span>Copy Temporary Password</span>
+              </>
+            )}
+          </button>
+
+          <div className="flex justify-end pt-1 border-t border-slate-200 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => setTemporaryPasswordModal(null)}
+              className="px-4 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold"
+            >
+              Done & Close
+            </button>
+          </div>
+        </div>
       </Modal>
     )}
 

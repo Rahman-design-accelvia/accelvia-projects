@@ -6,9 +6,27 @@
 // - Reliable Google / Gmail authentication
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { UserRole, UserProfile, DesignationRequest } from '../../types';
+import {
+  UserRole,
+  UserProfile,
+  DesignationRequest,
+  PasswordResetRequest,
+  PasswordAuditRecord,
+} from '../../types';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase/client';
-import { canUpdateUserPassword, canDeleteUserAccount } from '../../lib/auth/authorization';
+import {
+  canUpdateUserPassword,
+  canDeleteUserAccount,
+  canManageAdminPasswordRequests,
+  canManageMemberPasswordRequests,
+  canApprovePasswordResetRequest,
+} from '../../lib/auth/authorization';
+import {
+  hashPassword,
+  verifyPassword,
+  generateSecureTemporaryPassword,
+  validatePasswordStrength,
+} from '../../lib/auth/password-crypto';
 
 export interface TeamMember {
   user_id: string;
@@ -19,6 +37,7 @@ export interface TeamMember {
   designation?: string;
   requested_designation?: string;
   password?: string;
+  must_change_password?: boolean;
   status: 'active' | 'invited' | 'pending_approval' | 'suspended';
   created_at: string;
   notes?: string;
@@ -72,6 +91,17 @@ interface AuthContextType {
   addTeamMember: (member: { display_name: string; email: string; role: UserRole; password?: string }) => Promise<TeamMember>;
   removeTeamMember: (userId: string) => Promise<void>;
   updateUserPassword: (userId: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  // Task 2: Password Management & Reset Requests
+  passwordResetRequests: PasswordResetRequest[];
+  pendingPasswordRequests: PasswordResetRequest[];
+  passwordAuditHistory: PasswordAuditRecord[];
+  submitForgotPasswordRequest: (email: string) => Promise<{ success: boolean; message: string }>;
+  submitPasswordChangeRequest: (notes?: string) => Promise<{ success: boolean; error?: string }>;
+  approvePasswordResetRequest: (requestId: string, customPassword?: string) => Promise<{ success: boolean; error?: string; temporaryPassword?: string }>;
+  rejectPasswordResetRequest: (requestId: string, reason?: string) => Promise<{ success: boolean; error?: string }>;
+  completeTemporaryPasswordChange: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  superAdminResetUserPassword: (userId: string, customPassword?: string) => Promise<{ success: boolean; error?: string; temporaryPassword?: string }>;
+  mustChangePassword: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -79,6 +109,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const STORAGE_KEY_AUTH = 'accelvia_auth_session_v5';
 const STORAGE_KEY_TEAM = 'accelvia_team_members_v5';
 const STORAGE_KEY_SUPER_ADMIN = 'accelvia_super_admin_profile_v5';
+const STORAGE_KEY_PASSWORD_REQUESTS = 'accelvia_password_reset_requests_v1';
+const STORAGE_KEY_PASSWORD_AUDIT = 'accelvia_password_audit_v1';
 
 export const DEFAULT_CREDENTIALS = {
   super_admin: {
@@ -319,6 +351,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return designationRequests.filter((r) => r.status === 'pending');
   }, [designationRequests]);
 
+  // Password Reset & Change Requests State
+  const [passwordResetRequests, setPasswordResetRequests] = useState<PasswordResetRequest[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_PASSWORD_REQUESTS);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_PASSWORD_REQUESTS, JSON.stringify(passwordResetRequests));
+    } catch {}
+  }, [passwordResetRequests]);
+
+  const [passwordAuditHistory, setPasswordAuditHistory] = useState<PasswordAuditRecord[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_PASSWORD_AUDIT);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_PASSWORD_AUDIT, JSON.stringify(passwordAuditHistory));
+    } catch {}
+  }, [passwordAuditHistory]);
+
+  const addPasswordAuditRecord = useCallback((record: Omit<PasswordAuditRecord, 'id' | 'timestamp'>) => {
+    const newRecord: PasswordAuditRecord = {
+      ...record,
+      id: `pwd-audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      timestamp: new Date().toISOString(),
+    };
+    setPasswordAuditHistory((prev) => [newRecord, ...prev]);
+  }, []);
+
+  const pendingPasswordRequests = useMemo(() => {
+    return passwordResetRequests.filter((r) => r.status === 'pending');
+  }, [passwordResetRequests]);
+
   // 3. User Session State
   const [session, setSession] = useState<{
     isAuthenticated: boolean;
@@ -327,6 +403,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email: string;
     displayName: string;
     designation?: string;
+    mustChangePassword?: boolean;
   }>(() => {
     if (typeof window === 'undefined') {
       return {
@@ -335,6 +412,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         userId: 'guest',
         email: '',
         displayName: '',
+        mustChangePassword: false,
       };
     }
     try {
@@ -350,6 +428,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       userId: 'guest',
       email: '',
       displayName: '',
+      mustChangePassword: false,
     };
   });
 
@@ -386,16 +465,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const canAccessAudit = isSuperAdmin;
   const canCorrectEventTime = isSuperAdmin;
 
-  // Role-gated team members: Super Admin sees all updated passwords; other roles have passwords redacted
+  // Role-gated team members: Zero plaintext passwords or hashes exposed
   const roleGatedTeamMembers = useMemo(() => {
-    if (isSuperAdmin) {
-      return teamMembers;
-    }
-    return teamMembers.map((m) => ({
-      ...m,
-      password: m.user_id === currentUser.user_id ? m.password : undefined,
-    }));
-  }, [teamMembers, isSuperAdmin, currentUser.user_id]);
+    return teamMembers.map((m) => {
+      const sanitized = { ...m };
+      delete sanitized.password;
+      return sanitized;
+    });
+  }, [teamMembers]);
 
   const setRole = useCallback((newRole: UserRole) => {
     if (newRole === 'super_admin' && superAdminProfile) {
@@ -442,12 +519,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setSuperAdminProfile(newSuperAdmin);
 
+      const rawPassword = data.password?.trim() || 'Password123!';
+      const hashedPassword = await hashPassword(rawPassword);
+
       const superAdminMember: TeamMember = {
         user_id: newSuperAdmin.user_id,
         display_name: displayName,
         email: normalizedEmail,
         role: 'super_admin',
-        password: data.password || 'Password123!',
+        password: hashedPassword,
+        must_change_password: false,
         status: 'active',
         created_at: newSuperAdmin.created_at,
       };
@@ -464,7 +545,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             display_name: displayName,
             email: normalizedEmail,
             role: 'super_admin',
-            password: data.password || 'Password123!',
+            password: hashedPassword,
+            must_change_password: false,
             status: 'active',
           });
         } catch (e) {
@@ -512,13 +594,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       }
 
+      const rawPassword = data.password?.trim() || 'Password123!';
+      const hashedPassword = await hashPassword(rawPassword);
+
       const newMember: TeamMember = {
         user_id: `user-${Date.now()}`,
         display_name: displayName,
         email: normalizedEmail,
         role: data.requestedRole || 'member',
         requested_role: data.requestedRole || 'member',
-        password: data.password || 'Password123!',
+        password: hashedPassword,
+        must_change_password: false,
         status: 'pending_approval',
         created_at: new Date().toISOString(),
         notes: data.notes,
@@ -534,7 +620,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             email: normalizedEmail,
             role: newMember.role,
             requested_role: newMember.requested_role,
-            password: newMember.password,
+            password: hashedPassword,
+            must_change_password: false,
             status: 'pending_approval',
             notes: data.notes || null,
           });
@@ -612,6 +699,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithCredentials = useCallback(
     async (email: string, password?: string): Promise<{ success: boolean; error?: string }> => {
       const normalizedEmail = email.trim().toLowerCase();
+      if (!password || !password.trim()) {
+        return { success: false, error: 'Please enter your account password.' };
+      }
 
       // 1. Authenticate against central Supabase database
       if (isSupabaseConfigured) {
@@ -631,11 +721,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
 
             const expectedPassword = data.password || 'Password123!';
-            if (password && password !== expectedPassword && password !== 'Password123!') {
+            const isValid = await verifyPassword(password, expectedPassword);
+            if (!isValid) {
               return {
                 success: false,
                 error: `Incorrect password for ${email}. Please check your credentials or contact the Super Admin.`,
               };
+            }
+
+            // Transparently upgrade legacy plaintext password to PBKDF2 hash on login
+            if (!expectedPassword.startsWith('$pbkdf2$v1$100000$')) {
+              try {
+                const upgradedHash = await hashPassword(password);
+                await supabase.from('app_users').update({ password: upgradedHash }).eq('id', data.id);
+                setTeamMembers((prev) =>
+                  prev.map((m) => (m.user_id === data.id ? { ...m, password: upgradedHash } : m))
+                );
+              } catch (upgradeErr) {
+                console.warn('Auto-hash migration warning:', upgradeErr);
+              }
             }
 
             setSession({
@@ -644,6 +748,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               userId: data.id,
               email: data.email,
               displayName: data.display_name,
+              designation: data.designation,
+              mustChangePassword: Boolean(data.must_change_password),
             });
             return { success: true };
           }
@@ -652,7 +758,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // 2. Check local pending registrations
+      // 2. Check local registered team roster
       const matchedMember = teamMembers.find((m) => m.email.toLowerCase() === normalizedEmail);
       if (matchedMember) {
         if (matchedMember.status === 'pending_approval') {
@@ -663,11 +769,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         const expectedPassword = matchedMember.password || 'Password123!';
-        if (password && password !== expectedPassword && password !== 'Password123!') {
+        const isValid = await verifyPassword(password, expectedPassword);
+        if (!isValid) {
           return {
             success: false,
             error: `Incorrect password for ${email}. Please check your credentials or contact the Super Admin.`,
           };
+        }
+
+        // Transparently upgrade legacy plaintext password to PBKDF2 hash on login
+        if (!expectedPassword.startsWith('$pbkdf2$v1$100000$')) {
+          const upgradedHash = await hashPassword(password);
+          setTeamMembers((prev) =>
+            prev.map((m) => (m.user_id === matchedMember.user_id ? { ...m, password: upgradedHash } : m))
+          );
         }
 
         setSession({
@@ -676,18 +791,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           userId: matchedMember.user_id,
           email: matchedMember.email,
           displayName: matchedMember.display_name,
+          designation: matchedMember.designation,
+          mustChangePassword: Boolean(matchedMember.must_change_password),
         });
         return { success: true };
       }
 
-      // 3. Fallback demo credentials
+      // 3. Fallback demo credentials (Strictly verify password without bypass!)
       if (normalizedEmail === DEFAULT_CREDENTIALS.super_admin.email.toLowerCase()) {
+        const isValid = await verifyPassword(password, DEFAULT_CREDENTIALS.super_admin.password);
+        if (!isValid) {
+          return {
+            success: false,
+            error: `Incorrect password for ${email}. Please check your credentials or contact the Super Admin.`,
+          };
+        }
         setSession({
           isAuthenticated: true,
           role: 'super_admin',
           userId: 'sa-gravity',
           email: DEFAULT_CREDENTIALS.super_admin.email,
           displayName: DEFAULT_CREDENTIALS.super_admin.display_name,
+          mustChangePassword: false,
         });
         return { success: true };
       }
@@ -696,23 +821,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         normalizedEmail === DEFAULT_CREDENTIALS.admin.email.toLowerCase() ||
         normalizedEmail === 'musfiqurrahmansqa@gmail.com'
       ) {
+        const isValid = await verifyPassword(password, DEFAULT_CREDENTIALS.admin.password);
+        if (!isValid) {
+          return {
+            success: false,
+            error: `Incorrect password for ${email}. Please check your credentials or contact the Super Admin.`,
+          };
+        }
         setSession({
           isAuthenticated: true,
           role: 'admin',
           userId: 'user-musfiqur',
           email: normalizedEmail,
           displayName: 'Musfiqur Rahman (QA)',
+          mustChangePassword: false,
         });
         return { success: true };
       }
 
       if (normalizedEmail === DEFAULT_CREDENTIALS.member.email.toLowerCase()) {
+        const isValid = await verifyPassword(password, DEFAULT_CREDENTIALS.member.password);
+        if (!isValid) {
+          return {
+            success: false,
+            error: `Incorrect password for ${email}. Please check your credentials or contact the Super Admin.`,
+          };
+        }
         setSession({
           isAuthenticated: true,
           role: 'member',
           userId: 'member-1',
           email: DEFAULT_CREDENTIALS.member.email,
           displayName: DEFAULT_CREDENTIALS.member.display_name,
+          mustChangePassword: false,
         });
         return { success: true };
       }
@@ -867,6 +1008,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setTeamMembers((prev) => prev.filter((m) => m.user_id !== data.userId));
         }
       }
+
+      if (data.type === 'PASSWORD_RESET_REVOKE') {
+        if (data.userId === session.userId) {
+          try {
+            localStorage.setItem(
+              'accelvia_account_terminated_notice',
+              JSON.stringify({
+                deletedBy: data.resetBy || 'Management',
+                deletedName: session.displayName,
+                message: 'Your password was reset by an administrator. Active sessions have been revoked for your security. Please sign in with your temporary password.',
+                time: new Date().toISOString(),
+              })
+            );
+          } catch {}
+          logout();
+        }
+      }
     };
 
     return () => {
@@ -878,12 +1036,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addTeamMember = useCallback(
     async (member: { display_name: string; email: string; role: UserRole; password?: string }): Promise<TeamMember> => {
       const assignedPassword = member.password?.trim() || 'Password123!';
+      const hashedPassword = await hashPassword(assignedPassword);
       const newMember: TeamMember = {
         user_id: `user-${Date.now()}`,
         display_name: member.display_name,
         email: member.email.trim().toLowerCase(),
         role: member.role,
-        password: assignedPassword,
+        password: hashedPassword,
+        must_change_password: false,
         status: 'active',
         created_at: new Date().toISOString(),
       };
@@ -897,7 +1057,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             display_name: newMember.display_name,
             email: newMember.email,
             role: newMember.role,
-            password: assignedPassword,
+            password: hashedPassword,
+            must_change_password: false,
             status: 'active',
           });
         } catch (e) {
@@ -955,8 +1116,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateUserPassword = useCallback(
     async (userId: string, newPassword: string): Promise<{ success: boolean; error?: string }> => {
       const trimmed = newPassword.trim();
-      if (!trimmed || trimmed.length < 6) {
-        return { success: false, error: 'Password must be at least 6 characters long.' };
+      const strength = validatePasswordStrength(trimmed);
+      if (!strength.valid) {
+        return {
+          success: false,
+          error: strength.error || 'Password does not meet security requirements.',
+        };
       }
 
       // Strict Role Rule: Admin and Member can ONLY update their own designated account
@@ -967,13 +1132,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       }
 
+      const hashedPassword = await hashPassword(trimmed);
+
       // Update in Supabase central database
       if (isSupabaseConfigured) {
         try {
           const { error } = await supabase
             .from('app_users')
             .update({
-              password: trimmed,
+              password: hashedPassword,
+              must_change_password: false,
               updated_at: new Date().toISOString(),
             })
             .eq('id', userId);
@@ -988,32 +1156,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // Update in local state so Super Admin sees the updated password immediately
+      // Update in local state with hashed password
       setTeamMembers((prev) =>
-        prev.map((m) => (m.user_id === userId ? { ...m, password: trimmed } : m))
+        prev.map((m) =>
+          m.user_id === userId ? { ...m, password: hashedPassword, must_change_password: false } : m
+        )
       );
 
-      // If user updated their own password, synchronize current session storage
+      // Add audit history
+      const targetUser = teamMembers.find((m) => m.user_id === userId);
+      addPasswordAuditRecord({
+        target_user_id: userId,
+        target_user_email: targetUser?.email || currentUser.email,
+        performed_by_id: currentUser.user_id,
+        performed_by_name: currentUser.display_name,
+        performed_by_role: currentRole,
+        action: 'password_changed',
+        details:
+          userId === currentUser.user_id
+            ? 'Password updated directly by account owner'
+            : `Password directly updated by administrator ${currentUser.display_name}`,
+      });
+
+      // If user updated their own password, clear mustChangePassword in session
       if (userId === currentUser.user_id) {
-        try {
-          const authData = localStorage.getItem(STORAGE_KEY_AUTH);
-          if (authData) {
-            const parsed = JSON.parse(authData);
-            parsed.password = trimmed;
-            localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(parsed));
-          }
-          if (currentRole === 'super_admin') {
-            const saData = localStorage.getItem(STORAGE_KEY_SUPER_ADMIN);
-            if (saData) {
-              const parsed = JSON.parse(saData);
-              parsed.password = trimmed;
-              localStorage.setItem(STORAGE_KEY_SUPER_ADMIN, JSON.stringify(parsed));
-            }
-          }
-        } catch {}
+        setSession((prev) => ({
+          ...prev,
+          mustChangePassword: false,
+        }));
       }
 
-      // Broadcast password update notice across tabs (without exposing plain password over channel)
+      // Broadcast password update notice across tabs (without exposing password)
       if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
         try {
           const target = teamMembers.find((m) => m.user_id === userId);
@@ -1030,7 +1203,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return { success: true };
     },
-    [currentRole, currentUser.user_id, currentUser.display_name, teamMembers]
+    [currentRole, currentUser, teamMembers, addPasswordAuditRecord]
   );
 
   // Self-Service: All Admins & Members can change their own name immediately
@@ -1325,6 +1498,431 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [currentUser.user_id]
   );
 
+  // --------------------------------------------------------------------------
+  // TASK 2: PASSWORD MANAGEMENT & APPROVAL WORKFLOW
+  // --------------------------------------------------------------------------
+
+  // 1. Submit Forgot Password Request (From Public Login Screen)
+  const submitForgotPasswordRequest = useCallback(
+    async (email: string): Promise<{ success: boolean; message: string }> => {
+      const normalizedEmail = email.trim().toLowerCase();
+      const genericConfirmation =
+        'If an account exists for this email address, a password reset request has been securely submitted for administrative review.';
+
+      if (!normalizedEmail || !normalizedEmail.includes('@')) {
+        return { success: true, message: genericConfirmation };
+      }
+
+      // Check registered users in local roster or Supabase
+      let targetUser = teamMembers.find((m) => m.email.toLowerCase() === normalizedEmail);
+
+      if (!targetUser && isSupabaseConfigured) {
+        try {
+          const { data } = await supabase
+            .from('app_users')
+            .select('*')
+            .eq('email', normalizedEmail)
+            .maybeSingle();
+
+          if (data) {
+            targetUser = {
+              user_id: data.id,
+              display_name: data.display_name,
+              email: data.email,
+              role: data.role as UserRole,
+              status: data.status,
+              created_at: data.created_at,
+            };
+          }
+        } catch (e) {
+          console.warn('Error checking user for forgot password:', e);
+        }
+      }
+
+      if (targetUser) {
+        // Prevent duplicate pending requests for the same user
+        const alreadyPending = passwordResetRequests.some(
+          (r) => r.user_id === targetUser!.user_id && r.status === 'pending'
+        );
+
+        if (!alreadyPending) {
+          const newReq: PasswordResetRequest = {
+            id: `pwd-req-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            user_id: targetUser.user_id,
+            user_email: targetUser.email,
+            user_name: targetUser.display_name,
+            user_role: targetUser.role,
+            request_type: 'forgot_password',
+            status: 'pending',
+            submitted_at: new Date().toISOString(),
+          };
+
+          setPasswordResetRequests((prev) => [newReq, ...prev]);
+
+          addPasswordAuditRecord({
+            target_user_id: targetUser.user_id,
+            target_user_email: targetUser.email,
+            performed_by_id: 'anonymous',
+            performed_by_name: 'Forgot Password Portal',
+            performed_by_role: targetUser.role,
+            action: 'request_submitted',
+            details: 'External forgot password reset request submitted for review',
+          });
+        }
+      }
+
+      return { success: true, message: genericConfirmation };
+    },
+    [teamMembers, passwordResetRequests, addPasswordAuditRecord]
+  );
+
+  // 2. Submit Password Change Request (Authenticated Admin/Member Profile)
+  const submitPasswordChangeRequest = useCallback(
+    async (notes?: string): Promise<{ success: boolean; error?: string }> => {
+      if (currentRole === 'super_admin') {
+        return { success: false, error: 'Super Admin can update their password directly without approval.' };
+      }
+
+      const existingPending = passwordResetRequests.find(
+        (r) => r.user_id === currentUser.user_id && r.status === 'pending'
+      );
+
+      if (existingPending) {
+        return {
+          success: false,
+          error: 'You already have an active password change request pending approval by management.',
+        };
+      }
+
+      const newReq: PasswordResetRequest = {
+        id: `pwd-req-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        user_id: currentUser.user_id,
+        user_email: currentUser.email,
+        user_name: currentUser.display_name,
+        user_role: currentRole,
+        request_type: 'change_password',
+        status: 'pending',
+        notes: notes?.trim() || 'Internal password change request',
+        submitted_at: new Date().toISOString(),
+      };
+
+      setPasswordResetRequests((prev) => [newReq, ...prev]);
+
+      addPasswordAuditRecord({
+        target_user_id: currentUser.user_id,
+        target_user_email: currentUser.email,
+        performed_by_id: currentUser.user_id,
+        performed_by_name: currentUser.display_name,
+        performed_by_role: currentRole,
+        action: 'request_submitted',
+        details: notes?.trim() || 'Internal password change request',
+      });
+
+      return { success: true };
+    },
+    [currentRole, currentUser, passwordResetRequests, addPasswordAuditRecord]
+  );
+
+  // 3. Approve Password Reset Request (Super Admin or Admin)
+  const approvePasswordResetRequest = useCallback(
+    async (
+      requestId: string,
+      customPassword?: string
+    ): Promise<{ success: boolean; error?: string; temporaryPassword?: string }> => {
+      const targetReq = passwordResetRequests.find((r) => r.id === requestId);
+      if (!targetReq) {
+        return { success: false, error: 'Password reset request not found.' };
+      }
+
+      // Check authorization & strict self-approval guard
+      if (
+        !canApprovePasswordResetRequest(
+          currentRole,
+          targetReq.user_role,
+          targetReq.user_id,
+          currentUser.user_id
+        )
+      ) {
+        return {
+          success: false,
+          error:
+            'Unauthorized: You do not have permission to approve this request (Admins cannot approve their own requests).',
+        };
+      }
+
+      let temporaryPassword = customPassword?.trim();
+      if (temporaryPassword) {
+        const strength = validatePasswordStrength(temporaryPassword);
+        if (!strength.valid) {
+          return {
+            success: false,
+            error: strength.error || 'Custom password does not meet complexity requirements.',
+          };
+        }
+      } else {
+        temporaryPassword = generateSecureTemporaryPassword();
+      }
+
+      const hashedTempPassword = await hashPassword(temporaryPassword);
+
+      // Update user in Supabase
+      if (isSupabaseConfigured) {
+        try {
+          await supabase
+            .from('app_users')
+            .update({
+              password: hashedTempPassword,
+              must_change_password: true,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', targetReq.user_id);
+        } catch (e: any) {
+          console.warn('Error updating temporary password in Supabase:', e);
+        }
+      }
+
+      // Update team member in local roster
+      setTeamMembers((prev) =>
+        prev.map((m) =>
+          m.user_id === targetReq.user_id
+            ? { ...m, password: hashedTempPassword, must_change_password: true }
+            : m
+        )
+      );
+
+      // Mark request approved
+      const updatedReq: PasswordResetRequest = {
+        ...targetReq,
+        status: 'approved',
+        reviewed_by_id: currentUser.user_id,
+        reviewed_by_name: currentUser.display_name,
+        reviewed_by_role: currentRole,
+        reviewed_at: new Date().toISOString(),
+        temporary_password_issued: true,
+      };
+
+      setPasswordResetRequests((prev) =>
+        prev.map((r) => (r.id === requestId ? updatedReq : r))
+      );
+
+      // Record Audit
+      addPasswordAuditRecord({
+        target_user_id: targetReq.user_id,
+        target_user_email: targetReq.user_email,
+        performed_by_id: currentUser.user_id,
+        performed_by_name: currentUser.display_name,
+        performed_by_role: currentRole,
+        action: 'request_approved',
+        details: `Temporary password generated and previous credentials invalidated by ${currentUser.display_name}`,
+      });
+
+      // Broadcast session revocation to forcibly terminate active sessions of this user
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        try {
+          const channel = new BroadcastChannel('accelvia_sync_channel');
+          channel.postMessage({
+            type: 'PASSWORD_RESET_REVOKE',
+            userId: targetReq.user_id,
+            resetBy: currentUser.display_name,
+          });
+          channel.close();
+        } catch {}
+      }
+
+      return { success: true, temporaryPassword };
+    },
+    [passwordResetRequests, currentRole, currentUser, addPasswordAuditRecord]
+  );
+
+  // 4. Reject Password Reset Request
+  const rejectPasswordResetRequest = useCallback(
+    async (requestId: string, reason?: string): Promise<{ success: boolean; error?: string }> => {
+      const targetReq = passwordResetRequests.find((r) => r.id === requestId);
+      if (!targetReq) {
+        return { success: false, error: 'Password reset request not found.' };
+      }
+
+      if (
+        !canApprovePasswordResetRequest(
+          currentRole,
+          targetReq.user_role,
+          targetReq.user_id,
+          currentUser.user_id
+        )
+      ) {
+        return {
+          success: false,
+          error: 'Unauthorized: You do not have permission to reject this request.',
+        };
+      }
+
+      const updatedReq: PasswordResetRequest = {
+        ...targetReq,
+        status: 'rejected',
+        notes: reason ? `${targetReq.notes || ''} [Rejected: ${reason}]`.trim() : targetReq.notes,
+        reviewed_by_id: currentUser.user_id,
+        reviewed_by_name: currentUser.display_name,
+        reviewed_by_role: currentRole,
+        reviewed_at: new Date().toISOString(),
+      };
+
+      setPasswordResetRequests((prev) =>
+        prev.map((r) => (r.id === requestId ? updatedReq : r))
+      );
+
+      addPasswordAuditRecord({
+        target_user_id: targetReq.user_id,
+        target_user_email: targetReq.user_email,
+        performed_by_id: currentUser.user_id,
+        performed_by_name: currentUser.display_name,
+        performed_by_role: currentRole,
+        action: 'request_rejected',
+        details: reason || 'Password request rejected by administrator',
+      });
+
+      return { success: true };
+    },
+    [passwordResetRequests, currentRole, currentUser, addPasswordAuditRecord]
+  );
+
+  // 5. Super Admin Direct Reset
+  const superAdminResetUserPassword = useCallback(
+    async (
+      userId: string,
+      customPassword?: string
+    ): Promise<{ success: boolean; error?: string; temporaryPassword?: string }> => {
+      if (!isSuperAdmin) {
+        return { success: false, error: 'Only Super Admin can directly reset user passwords.' };
+      }
+
+      const target = teamMembers.find((m) => m.user_id === userId);
+      if (!target) {
+        return { success: false, error: 'User account not found.' };
+      }
+
+      let temporaryPassword = customPassword?.trim();
+      if (temporaryPassword) {
+        const strength = validatePasswordStrength(temporaryPassword);
+        if (!strength.valid) {
+          return {
+            success: false,
+            error: strength.error || 'Password does not meet complexity requirements.',
+          };
+        }
+      } else {
+        temporaryPassword = generateSecureTemporaryPassword();
+      }
+
+      const hashedTempPassword = await hashPassword(temporaryPassword);
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase
+            .from('app_users')
+            .update({
+              password: hashedTempPassword,
+              must_change_password: true,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', userId);
+        } catch (e) {
+          console.warn('Error setting temp password in Supabase:', e);
+        }
+      }
+
+      setTeamMembers((prev) =>
+        prev.map((m) =>
+          m.user_id === userId
+            ? { ...m, password: hashedTempPassword, must_change_password: true }
+            : m
+        )
+      );
+
+      addPasswordAuditRecord({
+        target_user_id: target.user_id,
+        target_user_email: target.email,
+        performed_by_id: currentUser.user_id,
+        performed_by_name: currentUser.display_name,
+        performed_by_role: 'super_admin',
+        action: 'password_reset_direct',
+        details: `Direct administrative reset initiated by Super Admin ${currentUser.display_name}`,
+      });
+
+      // Broadcast session revocation
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        try {
+          const channel = new BroadcastChannel('accelvia_sync_channel');
+          channel.postMessage({
+            type: 'PASSWORD_RESET_REVOKE',
+            userId,
+            resetBy: currentUser.display_name,
+          });
+          channel.close();
+        } catch {}
+      }
+
+      return { success: true, temporaryPassword };
+    },
+    [isSuperAdmin, teamMembers, currentUser, addPasswordAuditRecord]
+  );
+
+  // 6. Complete Mandatory Temporary Password Change on First Login
+  const completeTemporaryPasswordChange = useCallback(
+    async (newPassword: string): Promise<{ success: boolean; error?: string }> => {
+      const trimmed = newPassword.trim();
+      const strength = validatePasswordStrength(trimmed);
+      if (!strength.valid) {
+        return {
+          success: false,
+          error: strength.error || 'Password does not meet security requirements.',
+        };
+      }
+
+      const hashedPassword = await hashPassword(trimmed);
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase
+            .from('app_users')
+            .update({
+              password: hashedPassword,
+              must_change_password: false,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', currentUser.user_id);
+        } catch (e: any) {
+          console.warn('Error clearing must_change_password in Supabase:', e);
+        }
+      }
+
+      setTeamMembers((prev) =>
+        prev.map((m) =>
+          m.user_id === currentUser.user_id
+            ? { ...m, password: hashedPassword, must_change_password: false }
+            : m
+        )
+      );
+
+      setSession((prev) => ({
+        ...prev,
+        mustChangePassword: false,
+      }));
+
+      addPasswordAuditRecord({
+        target_user_id: currentUser.user_id,
+        target_user_email: currentUser.email,
+        performed_by_id: currentUser.user_id,
+        performed_by_name: currentUser.display_name,
+        performed_by_role: currentRole,
+        action: 'password_changed',
+        details: 'User successfully replaced temporary password with new permanent password',
+      });
+
+      return { success: true };
+    },
+    [currentUser, currentRole, addPasswordAuditRecord]
+  );
+
   const value = useMemo(
     () => ({
       isAuthenticated: session.isAuthenticated,
@@ -1362,9 +1960,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addTeamMember,
       removeTeamMember,
       updateUserPassword,
+      // Task 2: Password Management & Reset Requests
+      passwordResetRequests,
+      pendingPasswordRequests,
+      passwordAuditHistory,
+      submitForgotPasswordRequest,
+      submitPasswordChangeRequest,
+      approvePasswordResetRequest,
+      rejectPasswordResetRequest,
+      completeTemporaryPasswordChange,
+      superAdminResetUserPassword,
+      mustChangePassword: Boolean(session.mustChangePassword),
     }),
     [
       session.isAuthenticated,
+      session.mustChangePassword,
       currentUser,
       currentRole,
       setRole,
@@ -1399,6 +2009,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addTeamMember,
       removeTeamMember,
       updateUserPassword,
+      passwordResetRequests,
+      pendingPasswordRequests,
+      passwordAuditHistory,
+      submitForgotPasswordRequest,
+      submitPasswordChangeRequest,
+      approvePasswordResetRequest,
+      rejectPasswordResetRequest,
+      completeTemporaryPasswordChange,
+      superAdminResetUserPassword,
     ]
   );
 

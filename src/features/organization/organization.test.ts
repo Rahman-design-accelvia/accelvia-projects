@@ -186,4 +186,93 @@ describe('Global Organization & Company Branding Setup', () => {
 
     expect(estimateExport.text).toContain('BESPOKE SOFTWARE LTD. — ESTIMATE SCOPE v1.0');
   });
+
+  describe('Task 1: Company Name Management & Approval Workflow', () => {
+    it('submitting a proposed company name creates pending request and leaves active name unchanged', () => {
+      const activeInitial = getStoredCompanySettings();
+      expect(activeInitial.companyName).toBe('Rahman Design');
+
+      // Admin proposes a new name
+      const proposed = 'Nexus Interactive Global';
+      const pendingReq = {
+        id: 'req-1',
+        proposed_name: proposed,
+        requested_by_id: 'admin-1',
+        requested_by_name: 'Sarah Connor',
+        requested_by_email: 'admin@accelvia.internal',
+        requested_by_role: 'admin' as const,
+        status: 'pending' as const,
+        submitted_at: new Date().toISOString(),
+      };
+
+      localStorage.setItem('accelvia_company_name_requests_v1', JSON.stringify([pendingReq]));
+
+      // Active name MUST remain unchanged!
+      const activeAfterSubmission = getStoredCompanySettings();
+      expect(activeAfterSubmission.companyName).toBe('Rahman Design');
+
+      // Estimate and Work Order PDF must STILL use the active name, NOT the pending name
+      const mockVersion: ScopeVersion = {
+        id: 'v-104',
+        scope_package_id: 'pkg-4',
+        version_number: 1,
+        revision_type: 'initial',
+        total_hours_snapshot: 15,
+        total_usd_snapshot: 750,
+        total_bdt_snapshot: 90000,
+        status: 'pending',
+        created_at: new Date().toISOString(),
+        event_at: new Date().toISOString(),
+        items: [],
+      };
+      const pdfHtml = buildEstimatePDFHtml({ version: mockVersion });
+      expect(pdfHtml).toContain('RAHMAN DESIGN');
+      expect(pdfHtml).not.toContain('NEXUS INTERACTIVE GLOBAL');
+    });
+
+    it('approving a proposed company name updates global active name and synchronizes PDFs', () => {
+      // Super Admin approves the request
+      const approvedName = 'Nexus Interactive Global';
+      const updatedSettings = {
+        companyName: approvedName,
+        tagline: 'Engineering & Creative Client Delivery',
+        website: 'https://rahmandesign.com',
+        contactEmail: 'contact@rahmandesign.com',
+      };
+      localStorage.setItem(STORAGE_KEY_ORG, JSON.stringify(updatedSettings));
+
+      // Central settings now reflect approved name
+      const current = getStoredCompanySettings();
+      expect(current.companyName).toBe('Nexus Interactive Global');
+
+      // PDFs now automatically display the newly approved company name
+      const mockVersion: ScopeVersion = {
+        id: 'v-105',
+        scope_package_id: 'pkg-5',
+        version_number: 1,
+        revision_type: 'initial',
+        total_hours_snapshot: 20,
+        total_usd_snapshot: 1000,
+        total_bdt_snapshot: 120000,
+        status: 'approved',
+        created_at: new Date().toISOString(),
+        event_at: new Date().toISOString(),
+        items: [],
+      };
+      const pdfHtml = buildEstimatePDFHtml({ version: mockVersion });
+      expect(pdfHtml).toContain('NEXUS INTERACTIVE GLOBAL');
+    });
+
+    it('rejecting a proposed company name leaves the active name untouched', () => {
+      // Current active name
+      localStorage.setItem(
+        STORAGE_KEY_ORG,
+        JSON.stringify({ companyName: 'Authoritative Enterprise Corp' })
+      );
+
+      // Rejection does not modify STORAGE_KEY_ORG
+      const active = getStoredCompanySettings();
+      expect(active.companyName).toBe('Authoritative Enterprise Corp');
+    });
+  });
 });

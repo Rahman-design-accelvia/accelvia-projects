@@ -13,6 +13,15 @@ import {
   canViewUserPassword,
   canUpdateUserPassword,
   canDeleteUserAccount,
+  canSubmitCompanyNameRequest,
+  canApproveCompanyNameRequest,
+  canRejectCompanyNameRequest,
+  canDirectlyUpdateCompanyName,
+  canDeleteCompanyNameRequest,
+  canViewAllCompanyNameRequests,
+  canManageAdminPasswordRequests,
+  canManageMemberPasswordRequests,
+  canApprovePasswordResetRequest,
 } from './authorization';
 
 describe('Role & Permission Authorization Boundary Tests', () => {
@@ -140,37 +149,30 @@ describe('Role & Permission Authorization Boundary Tests', () => {
     expect((memberView as any).client_rate_bdt_per_hour).toBeUndefined();
   });
 
-  it('empowers Super Admin to view/reveal any user password while restricting Admin and Member to their own', () => {
-    // Super Admin can see any user's password
-    expect(canViewUserPassword('super_admin', 'user-admin-1', 'sa-1')).toBe(true);
-    expect(canViewUserPassword('super_admin', 'user-member-2', 'sa-1')).toBe(true);
-
-    // Admin can see ONLY their own password
-    expect(canViewUserPassword('admin', 'user-admin-1', 'user-admin-1')).toBe(true);
-    expect(canViewUserPassword('admin', 'user-member-2', 'user-admin-1')).toBe(false);
-    expect(canViewUserPassword('admin', 'sa-1', 'user-admin-1')).toBe(false);
-
-    // Member can see ONLY their own password
-    expect(canViewUserPassword('member', 'user-member-2', 'user-member-2')).toBe(true);
-    expect(canViewUserPassword('member', 'user-admin-1', 'user-member-2')).toBe(false);
-    expect(canViewUserPassword('member', 'sa-1', 'user-member-2')).toBe(false);
+  it('prohibits viewing existing passwords or password hashes for ALL roles as per enterprise standard', () => {
+    // Under Google L5 security standards, NO role (not even Super Admin) can view existing passwords
+    expect(canViewUserPassword('super_admin', 'user-admin-1', 'sa-1')).toBe(false);
+    expect(canViewUserPassword('super_admin', 'user-member-2', 'sa-1')).toBe(false);
+    expect(canViewUserPassword('admin', 'user-admin-1', 'user-admin-1')).toBe(false);
+    expect(canViewUserPassword('member', 'user-member-2', 'user-member-2')).toBe(false);
   });
 
-  it('empowers Super Admin to update any user password while restricting Admin and Member strictly to their own designated account', () => {
-    // Super Admin can update any account's password
+  it('empowers Super Admin to update any user password, Admin to manage Member passwords, and denies unmanaged changes', () => {
+    // Super Admin can update any account's password directly
     expect(canUpdateUserPassword('super_admin', 'user-admin-1', 'sa-1')).toBe(true);
     expect(canUpdateUserPassword('super_admin', 'user-member-2', 'sa-1')).toBe(true);
     expect(canUpdateUserPassword('super_admin', 'sa-1', 'sa-1')).toBe(true);
 
-    // Admin can ONLY update their own designated account password
-    expect(canUpdateUserPassword('admin', 'user-admin-1', 'user-admin-1')).toBe(true);
-    expect(canUpdateUserPassword('admin', 'user-member-2', 'user-admin-1')).toBe(false);
-    expect(canUpdateUserPassword('admin', 'sa-1', 'user-admin-1')).toBe(false);
+    // Admin can manage Member passwords
+    expect(canUpdateUserPassword('admin', 'user-member-2', 'user-admin-1', 'member')).toBe(true);
 
-    // Member can ONLY update their own designated account password
-    expect(canUpdateUserPassword('member', 'user-member-2', 'user-member-2')).toBe(true);
+    // Admin cannot change another Admin's or Super Admin's password
+    expect(canUpdateUserPassword('admin', 'sa-1', 'user-admin-1', 'super_admin')).toBe(false);
+    expect(canUpdateUserPassword('admin', 'user-other-admin', 'user-admin-1', 'admin')).toBe(false);
+
+    // Member cannot update anyone without authorized workflow
+    expect(canUpdateUserPassword('member', 'user-member-2', 'user-member-2')).toBe(false);
     expect(canUpdateUserPassword('member', 'user-admin-1', 'user-member-2')).toBe(false);
-    expect(canUpdateUserPassword('member', 'sa-1', 'user-member-2')).toBe(false);
   });
 
   it('strictly restricts account deletion to Super Admin and prohibits deleting root Super Admin', () => {
@@ -185,5 +187,76 @@ describe('Role & Permission Authorization Boundary Tests', () => {
     expect(canDeleteUserAccount('admin', 'member')).toBe(false);
     expect(canDeleteUserAccount('admin', 'admin')).toBe(false);
     expect(canDeleteUserAccount('member', 'member')).toBe(false);
+  });
+
+  describe('Task 1: Company Name Management Authorization Boundaries', () => {
+    it('allows Admin and Super Admin to submit company name requests, denying Member', () => {
+      expect(canSubmitCompanyNameRequest('super_admin')).toBe(true);
+      expect(canSubmitCompanyNameRequest('admin')).toBe(true);
+      expect(canSubmitCompanyNameRequest('member')).toBe(false);
+    });
+
+    it('strictly restricts company name approval and rejection to Super Admin', () => {
+      expect(canApproveCompanyNameRequest('super_admin')).toBe(true);
+      expect(canApproveCompanyNameRequest('admin')).toBe(false);
+      expect(canApproveCompanyNameRequest('member')).toBe(false);
+
+      expect(canRejectCompanyNameRequest('super_admin')).toBe(true);
+      expect(canRejectCompanyNameRequest('admin')).toBe(false);
+      expect(canRejectCompanyNameRequest('member')).toBe(false);
+    });
+
+    it('strictly restricts direct company name updates and entry deletions to Super Admin', () => {
+      expect(canDirectlyUpdateCompanyName('super_admin')).toBe(true);
+      expect(canDirectlyUpdateCompanyName('admin')).toBe(false);
+      expect(canDirectlyUpdateCompanyName('member')).toBe(false);
+
+      expect(canDeleteCompanyNameRequest('super_admin')).toBe(true);
+      expect(canDeleteCompanyNameRequest('admin')).toBe(false);
+      expect(canDeleteCompanyNameRequest('member')).toBe(false);
+    });
+
+    it('restricts global company name request inspection to Super Admin', () => {
+      expect(canViewAllCompanyNameRequests('super_admin')).toBe(true);
+      expect(canViewAllCompanyNameRequests('admin')).toBe(false);
+      expect(canViewAllCompanyNameRequests('member')).toBe(false);
+    });
+  });
+
+  describe('Task 2: Password Reset & Change Request RBAC Boundaries', () => {
+    it('restricts Admin password requests to Super Admin only', () => {
+      expect(canManageAdminPasswordRequests('super_admin')).toBe(true);
+      expect(canManageAdminPasswordRequests('admin')).toBe(false);
+      expect(canManageAdminPasswordRequests('member')).toBe(false);
+    });
+
+    it('allows Super Admin and Admin to manage Member password requests, denying Member', () => {
+      expect(canManageMemberPasswordRequests('super_admin')).toBe(true);
+      expect(canManageMemberPasswordRequests('admin')).toBe(true);
+      expect(canManageMemberPasswordRequests('member')).toBe(false);
+    });
+
+    it('enforces self-approval restriction: nobody can approve their own password reset request', () => {
+      // Admin cannot approve own request
+      expect(canApprovePasswordResetRequest('admin', 'admin', 'admin-1', 'admin-1')).toBe(false);
+      // Member cannot approve own request
+      expect(canApprovePasswordResetRequest('member', 'member', 'member-1', 'member-1')).toBe(false);
+      // Super Admin cannot approve own request
+      expect(canApprovePasswordResetRequest('super_admin', 'super_admin', 'sa-1', 'sa-1')).toBe(false);
+    });
+
+    it('enforces that Super Admin can approve Admin and Member requests, Admin can approve Member requests only', () => {
+      // Super Admin approving Admin
+      expect(canApprovePasswordResetRequest('super_admin', 'admin', 'sa-1', 'admin-1')).toBe(true);
+      // Super Admin approving Member
+      expect(canApprovePasswordResetRequest('super_admin', 'member', 'sa-1', 'member-1')).toBe(true);
+
+      // Admin approving Member
+      expect(canApprovePasswordResetRequest('admin', 'member', 'admin-1', 'member-1')).toBe(true);
+      // Admin approving another Admin (prohibited!)
+      expect(canApprovePasswordResetRequest('admin', 'admin', 'admin-1', 'admin-2')).toBe(false);
+      // Admin approving Super Admin (prohibited!)
+      expect(canApprovePasswordResetRequest('admin', 'super_admin', 'admin-1', 'sa-1')).toBe(false);
+    });
   });
 });

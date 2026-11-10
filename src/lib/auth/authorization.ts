@@ -93,29 +93,36 @@ export function sanitizeFinancialsForRole<T extends { total_usd_snapshot?: numbe
 }
 
 /**
- * Super Admin can see (reveal/view) all users' passwords.
- * Non-Super Admins (Admin, Member) can only see their own designated account password.
+ * Password Security: As per Google L5 enterprise security requirements,
+ * existing user passwords and password hashes can NEVER be viewed by any role,
+ * including Super Admin.
  */
 export function canViewUserPassword(
-  viewerRole: UserRole,
-  targetUserId: string,
-  currentUserId: string
+  _viewerRole: UserRole,
+  _targetUserId?: string,
+  _currentUserId?: string
 ): boolean {
-  if (viewerRole === 'super_admin') return true;
-  return targetUserId === currentUserId;
+  return false;
 }
 
 /**
- * Super Admin can update any user's password.
- * Admin and Member can ONLY update the password for their own designated account.
+ * Super Admin can update/reset any user's password directly.
+ * Admin can manage/reset Member passwords.
+ * Members cannot independently update/reset without authorized workflow.
  */
 export function canUpdateUserPassword(
   viewerRole: UserRole,
   targetUserId: string,
-  currentUserId: string
+  currentUserId: string,
+  targetUserRole?: UserRole
 ): boolean {
   if (viewerRole === 'super_admin') return true;
-  return targetUserId === currentUserId;
+  if (viewerRole === 'admin') {
+    // Admin can manage members, but cannot manage other admins or super admin
+    if (targetUserRole === 'member') return true;
+    return targetUserId === currentUserId;
+  }
+  return false;
 }
 
 /**
@@ -129,3 +136,95 @@ export function canDeleteUserAccount(
   if (viewerRole !== 'super_admin') return false;
   return targetRole !== 'super_admin';
 }
+
+// ============================================================================
+// TASK 1: COMPANY NAME MANAGEMENT RBAC
+// ============================================================================
+
+/**
+ * Admins and Super Admins can submit company name change requests.
+ * Members cannot submit company name requests.
+ */
+export function canSubmitCompanyNameRequest(role: UserRole): boolean {
+  return role === 'super_admin' || role === 'admin';
+}
+
+/**
+ * Only Super Admin can approve company name requests.
+ * Admins CANNOT approve their own or any other request.
+ */
+export function canApproveCompanyNameRequest(role: UserRole): boolean {
+  return role === 'super_admin';
+}
+
+/**
+ * Only Super Admin can reject company name requests.
+ */
+export function canRejectCompanyNameRequest(role: UserRole): boolean {
+  return role === 'super_admin';
+}
+
+/**
+ * Only Super Admin can directly update the global active company name.
+ */
+export function canDirectlyUpdateCompanyName(role: UserRole): boolean {
+  return role === 'super_admin';
+}
+
+/**
+ * Only Super Admin can delete company name request/history entries.
+ */
+export function canDeleteCompanyNameRequest(role: UserRole): boolean {
+  return role === 'super_admin';
+}
+
+/**
+ * Only Super Admin can view all submitted company name requests.
+ * Admins can only view requests they submitted.
+ */
+export function canViewAllCompanyNameRequests(role: UserRole): boolean {
+  return role === 'super_admin';
+}
+
+// ============================================================================
+// TASK 2: PASSWORD MANAGEMENT & RESET RBAC
+// ============================================================================
+
+/**
+ * Super Admin manages Admin password change & reset requests.
+ * Admins cannot view or manage Admin requests.
+ */
+export function canManageAdminPasswordRequests(viewerRole: UserRole): boolean {
+  return viewerRole === 'super_admin';
+}
+
+/**
+ * Both Super Admin and Admin can manage Member password change & reset requests.
+ * Members have no management authority.
+ */
+export function canManageMemberPasswordRequests(viewerRole: UserRole): boolean {
+  return viewerRole === 'super_admin' || viewerRole === 'admin';
+}
+
+/**
+ * Enforces authorization for approving or resetting a specific target request.
+ */
+export function canApprovePasswordResetRequest(
+  viewerRole: UserRole,
+  requesterRole: UserRole,
+  viewerUserId: string,
+  requesterUserId: string
+): boolean {
+  // Self-approval restriction: Nobody can approve their own password request
+  if (viewerUserId === requesterUserId) return false;
+
+  if (requesterRole === 'super_admin') return false; // Root SA handled through master setup
+  if (requesterRole === 'admin') {
+    return viewerRole === 'super_admin'; // Only Super Admin can approve Admin
+  }
+  if (requesterRole === 'member') {
+    return viewerRole === 'super_admin' || viewerRole === 'admin'; // Admin or Super Admin
+  }
+  return false;
+}
+

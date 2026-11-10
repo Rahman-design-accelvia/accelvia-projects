@@ -8,6 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from '../../components/Modal';
 import { useAuth } from './AuthContext';
 import { UserRole } from '../../types';
+import { validatePasswordStrength } from '../../lib/auth/password-crypto';
 import { 
   User, 
   Mail, 
@@ -41,7 +42,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
     updateDisplayName, 
     submitDesignationRequest,
     pendingDesignationRequests,
-    updateUserPassword
+    updateUserPassword,
+    passwordResetRequests,
+    submitPasswordChangeRequest
   } = useAuth();
 
   // Display Name editing state
@@ -58,7 +61,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
   const [requestSuccess, setRequestSuccess] = useState<string | null>(null);
   const [requestError, setRequestError] = useState<string | null>(null);
 
-  // Password change state (Self-Service for designated account)
+  // Super Admin direct password change state
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -67,32 +70,56 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
+  // Admin & Member password change request state
+  const [passwordRequestNotes, setPasswordRequestNotes] = useState('');
+  const [isSubmittingPasswordRequest, setIsSubmittingPasswordRequest] = useState(false);
+  const [passwordRequestSuccess, setPasswordRequestSuccess] = useState<string | null>(null);
+  const [passwordRequestError, setPasswordRequestError] = useState<string | null>(null);
+
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError(null);
     setPasswordSuccess(null);
 
-    const trimmed = newPasswordInput.trim();
-    if (!trimmed || trimmed.length < 6) {
-      setPasswordError('Password must be at least 6 characters long.');
+    const validation = validatePasswordStrength(newPasswordInput);
+    if (!validation.valid) {
+      setPasswordError(validation.error || 'Password does not meet security requirements.');
       return;
     }
-    if (trimmed !== confirmPasswordInput.trim()) {
+    if (newPasswordInput.trim() !== confirmPasswordInput.trim()) {
       setPasswordError('Passwords do not match. Please re-enter.');
       return;
     }
 
     setIsUpdatingPassword(true);
-    const res = await updateUserPassword(currentUser.user_id, trimmed);
+    const res = await updateUserPassword(currentUser.user_id, newPasswordInput.trim());
     setIsUpdatingPassword(false);
 
     if (!res.success) {
       setPasswordError(res.error || 'Failed to update password.');
     } else {
-      setPasswordSuccess('Password updated successfully for your designated account!');
+      setPasswordSuccess('Password updated successfully!');
       setNewPasswordInput('');
       setConfirmPasswordInput('');
       setTimeout(() => setPasswordSuccess(null), 4000);
+    }
+  };
+
+  const handleRequestPasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordRequestError(null);
+    setPasswordRequestSuccess(null);
+
+    setIsSubmittingPasswordRequest(true);
+    const res = await submitPasswordChangeRequest(passwordRequestNotes.trim() || undefined);
+    setIsSubmittingPasswordRequest(false);
+
+    if (!res.success) {
+      setPasswordRequestError(res.error || 'Failed to submit password change request.');
+    } else {
+      setPasswordRequestSuccess('Password change request submitted successfully for administrative review!');
+      setPasswordRequestNotes('');
+      setTimeout(() => setPasswordRequestSuccess(null), 4000);
     }
   };
 
@@ -105,6 +132,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
   // Check if current user already has an active pending request
   const myPendingRequest = pendingDesignationRequests.find(
     (r) => r.applicant_id === currentUser.user_id || r.applicant_email.toLowerCase() === currentUser.email.toLowerCase()
+  );
+
+  // Check if current user already has an active pending password reset/change request
+  const myPendingPasswordRequest = passwordResetRequests.find(
+    (r) => (r.user_id === currentUser.user_id || r.user_email.toLowerCase() === currentUser.email.toLowerCase()) && r.status === 'pending'
   );
 
   const handleSaveName = async (e: React.FormEvent) => {
@@ -389,101 +421,189 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
         </div>
 
         {/* ================================================================= */}
-        {/* SECTION 3: CHANGE MY PASSWORD (Designated Account Only)           */}
+        {/* SECTION 3: PASSWORD MANAGEMENT (Role-Gated Governance)           */}
         {/* ================================================================= */}
         <div className="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
           <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
             <div className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
               <Lock className="w-4 h-4 text-emerald-600 dark:text-teal-400" />
-              <span>Change Account Password</span>
+              <span>{isSuperAdmin ? 'Change Master Account Password' : 'Password Management & Reset'}</span>
             </div>
-            <span className="text-[10px] text-emerald-600 dark:text-teal-400 font-medium">
-              Designated Account Only
+            <span className="text-[10px] text-emerald-600 dark:text-teal-400 font-mono font-medium">
+              {isSuperAdmin ? 'Root Self-Service' : 'Governance Approval Required'}
             </span>
           </div>
 
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-            Update your account password. Admins and Members can change credentials for their own account only.
-          </p>
+          {isSuperAdmin ? (
+            /* Super Admin Direct Self-Service Password Update */
+            <>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                As the Founding Super Admin, you can directly update your master account password. It will be hashed with PBKDF2-SHA256 (100,000 rounds).
+              </p>
 
-          {passwordSuccess && (
-            <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs flex items-center gap-2 animate-in fade-in">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>{passwordSuccess}</span>
-            </div>
-          )}
+              {passwordSuccess && (
+                <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs flex items-center gap-2 animate-in fade-in">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{passwordSuccess}</span>
+                </div>
+              )}
 
-          {passwordError && (
-            <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2 animate-in fade-in">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{passwordError}</span>
-            </div>
-          )}
+              {passwordError && (
+                <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2 animate-in fade-in">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{passwordError}</span>
+                </div>
+              )}
 
-          <form onSubmit={handleUpdatePassword} className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  New Password <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type={showNewPassword ? 'text' : 'password'}
-                    required
-                    minLength={6}
-                    value={newPasswordInput}
-                    onChange={(e) => setNewPasswordInput(e.target.value)}
-                    placeholder="Min 6 characters"
-                    className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg pl-3 pr-8 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-teal-500 font-mono"
-                  />
+              <form onSubmit={handleUpdatePassword} className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      New Password <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showNewPassword ? 'text' : 'password'}
+                        required
+                        minLength={6}
+                        value={newPasswordInput}
+                        onChange={(e) => setNewPasswordInput(e.target.value)}
+                        placeholder="Min 6 characters"
+                        className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg pl-3 pr-8 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-teal-500 font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword((prev) => !prev)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
+                        title={showNewPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showNewPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      Confirm New Password <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        required
+                        minLength={6}
+                        value={confirmPasswordInput}
+                        onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                        placeholder="Re-enter password"
+                        className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg pl-3 pr-8 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-teal-500 font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword((prev) => !prev)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
+                        title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-1">
                   <button
-                    type="button"
-                    onClick={() => setShowNewPassword((prev) => !prev)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
-                    title={showNewPassword ? 'Hide password' : 'Show password'}
+                    type="submit"
+                    disabled={isUpdatingPassword || !newPasswordInput.trim() || !confirmPasswordInput.trim()}
+                    className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-xs disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
                   >
-                    {showNewPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    <Key className="w-3.5 h-3.5" />
+                    <span>{isUpdatingPassword ? 'Updating...' : 'Update Master Password'}</span>
                   </button>
                 </div>
+              </form>
+            </>
+          ) : myPendingPasswordRequest ? (
+            /* Pending Password Change / Reset Request Alert */
+            <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/80 text-amber-900 dark:text-amber-200 space-y-2">
+              <div className="flex items-center gap-2 font-bold text-xs">
+                <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                <span>Password Change Request Under Review</span>
               </div>
+              <p className="text-[11px] leading-relaxed">
+                Your request ({myPendingPasswordRequest.request_type === 'forgot_password' ? 'Forgot Password Reset' : 'Password Rotation'}) submitted on{' '}
+                <strong>{new Date(myPendingPasswordRequest.submitted_at).toLocaleDateString()}</strong> is awaiting administrative authorization.
+              </p>
+              {myPendingPasswordRequest.notes && (
+                <div className="text-[10px] text-amber-800 dark:text-amber-300 italic bg-amber-100/50 dark:bg-amber-900/30 p-2 rounded">
+                  Note: "{myPendingPasswordRequest.notes}"
+                </div>
+              )}
+              <div className="p-2 rounded bg-white/70 dark:bg-slate-900/70 border border-amber-200 dark:border-amber-800/60 text-[10px] text-slate-600 dark:text-slate-300 flex items-start gap-1.5">
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Security Policy:</strong> Upon approval, management will generate a temporary one-time password and provide it to you. You will be prompted to set a permanent password on your next sign-in.
+                </span>
+              </div>
+            </div>
+          ) : (
+            /* Admin & Member Password Change Request Form */
+            <form onSubmit={handleRequestPasswordChange} className="space-y-3">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                Under enterprise security policy, password changes require administrative authorization to prevent unauthorized account takeover and maintain separation of duties.
+              </p>
+
+              {passwordRequestSuccess && (
+                <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs flex items-center gap-2 animate-in fade-in">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{passwordRequestSuccess}</span>
+                </div>
+              )}
+
+              {passwordRequestError && (
+                <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2 animate-in fade-in">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{passwordRequestError}</span>
+                </div>
+              )}
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  Confirm New Password <span className="text-rose-500">*</span>
+                  Reason for Password Change (Optional)
                 </label>
-                <div className="relative">
-                  <input
-                    type={showConfirmPassword ? 'text' : 'password'}
-                    required
-                    minLength={6}
-                    value={confirmPasswordInput}
-                    onChange={(e) => setConfirmPasswordInput(e.target.value)}
-                    placeholder="Re-enter password"
-                    className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg pl-3 pr-8 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-teal-500 font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword((prev) => !prev)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
-                    title={showConfirmPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
+                <textarea
+                  rows={2}
+                  value={passwordRequestNotes}
+                  onChange={(e) => setPasswordRequestNotes(e.target.value)}
+                  placeholder="e.g. Routine 90-day password rotation or device migration..."
+                  className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
+                />
               </div>
-            </div>
 
-            <div className="flex justify-end pt-1">
-              <button
-                type="submit"
-                disabled={isUpdatingPassword || !newPasswordInput.trim() || !confirmPasswordInput.trim()}
-                className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-xs disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
-              >
-                <Key className="w-3.5 h-3.5" />
-                <span>{isUpdatingPassword ? 'Updating...' : 'Update My Password'}</span>
-              </button>
-            </div>
-          </form>
+              <div className="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[11px] text-slate-600 dark:text-slate-300 flex items-start gap-2">
+                <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                <span>
+                  {isAdmin ? (
+                    <>
+                      <strong>Admin Governance:</strong> Your password request will be submitted to the <strong>Super Admin</strong>. Once approved, a temporary password will be issued.
+                    </>
+                  ) : (
+                    <>
+                      <strong>Member Governance:</strong> Your password request will be submitted to your <strong>Admin</strong> or <strong>Super Admin</strong>. Once approved, a temporary password will be issued.
+                    </>
+                  )}
+                </span>
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="submit"
+                  disabled={isSubmittingPasswordRequest}
+                  className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-xs disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{isSubmittingPasswordRequest ? 'Submitting...' : 'Submit Password Change Request'}</span>
+                </button>
+              </div>
+            </form>
+          )}
         </div>
 
         <div className="flex justify-end pt-2">

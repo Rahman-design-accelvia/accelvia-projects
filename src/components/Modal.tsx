@@ -11,6 +11,7 @@ interface ModalProps {
   subtitle?: string;
   children: React.ReactNode;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl';
+  isDismissible?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -20,10 +21,11 @@ export const Modal: React.FC<ModalProps> = ({
   subtitle,
   children,
   maxWidth = 'lg',
+  isDismissible = true,
 }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (isDismissible && e.key === 'Escape') onClose();
     };
     if (isOpen) {
       window.addEventListener('keydown', handleKeyDown);
@@ -33,7 +35,7 @@ export const Modal: React.FC<ModalProps> = ({
       window.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = 'unset';
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, isDismissible]);
 
   if (!isOpen) return null;
 
@@ -51,7 +53,7 @@ export const Modal: React.FC<ModalProps> = ({
       {/* Backdrop */}
       <div 
         className="fixed inset-0 bg-slate-950/50 dark:bg-slate-950/85 backdrop-blur-sm transition-opacity" 
-        onClick={onClose} 
+        onClick={isDismissible ? onClose : undefined} 
       />
 
       {/* Dialog box with bottom-sheet look on mobile */}
@@ -66,13 +68,15 @@ export const Modal: React.FC<ModalProps> = ({
             <h3 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100 truncate">{title}</h3>
             {subtitle && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">{subtitle}</p>}
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800 transition shrink-0"
-            aria-label="Close modal"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {isDismissible && (
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800 transition shrink-0"
+              aria-label="Close modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* Content */}

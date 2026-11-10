@@ -34,7 +34,8 @@ export const LoginView: React.FC = () => {
     registerUser, 
     loginWithCredentials, 
     loginAsRole, 
-    loginWithGoogleGmail 
+    loginWithGoogleGmail,
+    submitForgotPasswordRequest
   } = useAuth();
   const { toggleTheme, isDark } = useTheme();
   const { companyName } = useOrganization();
@@ -58,6 +59,13 @@ export const LoginView: React.FC = () => {
     message: string;
     email: string;
   } | null>(null);
+
+  // Forgot Password Modal State
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [isSubmittingForgot, setIsSubmittingForgot] = useState(false);
+  const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState<string | null>(null);
+  const [forgotPasswordError, setForgotPasswordError] = useState<string | null>(null);
 
   // Account Terminated notice from cross-device or Super Admin deletion
   const [terminatedNotice, setTerminatedNotice] = useState<string | null>(() => {
@@ -194,6 +202,28 @@ export const LoginView: React.FC = () => {
     setEmail(cred.email);
     setPassword(cred.password);
     loginAsRole(role);
+  };
+
+  // Forgot Password Handler
+  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotPasswordEmail.trim()) {
+      setForgotPasswordError('Please enter your registered email address.');
+      return;
+    }
+
+    setIsSubmittingForgot(true);
+    setForgotPasswordError(null);
+    setForgotPasswordSuccess(null);
+
+    try {
+      const res = await submitForgotPasswordRequest(forgotPasswordEmail.trim());
+      setForgotPasswordSuccess(res.message);
+    } catch (err: any) {
+      setForgotPasswordError(err?.message || 'Failed to submit reset request.');
+    } finally {
+      setIsSubmittingForgot(false);
+    }
   };
 
   return (
@@ -393,9 +423,23 @@ export const LoginView: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Password
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                        Password
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowForgotPassword(true);
+                          setForgotPasswordEmail(email.trim());
+                          setForgotPasswordSuccess(null);
+                          setForgotPasswordError(null);
+                        }}
+                        className="text-[11px] font-semibold text-emerald-600 dark:text-teal-400 hover:underline"
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
                     <div className="relative">
                       <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
@@ -536,7 +580,7 @@ export const LoginView: React.FC = () => {
 
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Password
+                      Account Password {!isSuperAdminRegistered && '(Alpha@@2026 recommended)'}
                     </label>
                     <div className="relative">
                       <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -739,6 +783,128 @@ export const LoginView: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* FORGOT PASSWORD MODAL                                              */}
+      {/* =================================================================== */}
+      {showForgotPassword && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+          <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/80 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                    Forgot Password
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-mono">
+                    Administrative Reset Workflow
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForgotPassword(false);
+                  setForgotPasswordSuccess(null);
+                  setForgotPasswordError(null);
+                }}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {forgotPasswordSuccess ? (
+              <div className="space-y-3">
+                <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 text-emerald-900 dark:text-emerald-200 text-xs flex items-start gap-2.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <div className="font-bold">Request Submitted</div>
+                    <p className="text-[11px] leading-relaxed opacity-90">{forgotPasswordSuccess}</p>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                  <strong>Security notice:</strong> For data confidentiality, password requests are reviewed by an authorized workspace administrator. Once authorized, a one-time temporary password will be provided through your company's secure channel.
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForgotPassword(false);
+                    setForgotPasswordSuccess(null);
+                  }}
+                  className="w-full py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold transition"
+                >
+                  Return to Sign In
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleForgotPasswordSubmit} className="space-y-3">
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  Enter your registered email address below. A password reset request will be securely submitted for administrative review.
+                </p>
+
+                {forgotPasswordError && (
+                  <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{forgotPasswordError}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Account Email Address
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="email"
+                      required
+                      autoFocus
+                      value={forgotPasswordEmail}
+                      onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                      placeholder="you@company.com"
+                      className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowForgotPassword(false);
+                      setForgotPasswordError(null);
+                    }}
+                    className="flex-1 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingForgot}
+                    className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs flex items-center justify-center gap-1.5"
+                  >
+                    {isSubmittingForgot ? (
+                      <span>Submitting...</span>
+                    ) : (
+                      <>
+                        <span>Submit Request</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

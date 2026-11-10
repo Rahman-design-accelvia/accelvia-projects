@@ -68,6 +68,7 @@ import { PushToastContainer } from '../notifications/PushToastContainer';
 import { LoginView } from '../auth/LoginView';
 import { TeamManagementModal } from '../auth/TeamManagementModal';
 import { UserProfileModal } from '../auth/UserProfileModal';
+import { TemporaryPasswordModal } from '../auth/TemporaryPasswordModal';
 import { Modal } from '../../components/Modal';
 import { ProjectCalendarModal } from '../calendar/ProjectCalendarModal';
 import { Calendar as CalendarIcon } from 'lucide-react';
@@ -125,7 +126,7 @@ export function extractMessageSnippet(contentJson: Record<string, unknown>): str
 }
 
 export const WorkspaceLayout: React.FC = () => {
-  const { currentRole, currentUser, isSuperAdmin, isAdmin, isMember, isAuthenticated, logout, pendingRegistrations, teamMembers, canViewMoney, pendingDesignationRequests } = useAuth();
+  const { currentRole, currentUser, isSuperAdmin, isAdmin, isMember, isAuthenticated, logout, pendingRegistrations, teamMembers, canViewMoney, pendingDesignationRequests, mustChangePassword } = useAuth();
   const { theme, toggleTheme, isDark, preset, accentColor } = useTheme();
   const { notify, unreadCount } = useNotifications();
   const { companyName } = useOrganization();
@@ -2668,6 +2669,11 @@ export const WorkspaceLayout: React.FC = () => {
       <UserProfileModal
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
+      />
+
+      {/* Mandatory Temporary Password Reset Modal (Google L5 Security Enforcement) */}
+      <TemporaryPasswordModal
+        isOpen={mustChangePassword}
       />
 
       {/* Admin Confirm Project Completion Modal */}
