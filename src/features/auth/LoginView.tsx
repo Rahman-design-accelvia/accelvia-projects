@@ -59,6 +59,20 @@ export const LoginView: React.FC = () => {
     email: string;
   } | null>(null);
 
+  // Account Terminated notice from cross-device or Super Admin deletion
+  const [terminatedNotice, setTerminatedNotice] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const saved = localStorage.getItem('accelvia_account_terminated_notice');
+      if (saved) {
+        localStorage.removeItem('accelvia_account_terminated_notice');
+        const parsed = JSON.parse(saved);
+        return `Your account was permanently deleted by the Super Admin (${parsed.deletedBy || 'Executive Management'}). Access to this workspace has been terminated.`;
+      }
+    } catch {}
+    return null;
+  });
+
   // Native Google/Gmail Sign In Modal State
   const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [googleGmailInput, setGoogleGmailInput] = useState('');
@@ -254,6 +268,17 @@ export const LoginView: React.FC = () => {
                 <span>{!isSuperAdminRegistered ? 'Setup Super Admin' : 'Register Account'}</span>
               </button>
             </div>
+
+            {/* Account Terminated Notice Banner */}
+            {terminatedNotice && (
+              <div className="mb-4 p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2.5 animate-in fade-in">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
+                <div className="space-y-0.5">
+                  <div className="font-bold">Account Terminated Notice</div>
+                  <div className="text-[11px] leading-relaxed">{terminatedNotice}</div>
+                </div>
+              </div>
+            )}
 
             {/* Error Message */}
             {errorMessage && (

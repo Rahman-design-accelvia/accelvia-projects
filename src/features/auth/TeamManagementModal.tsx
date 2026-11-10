@@ -81,6 +81,25 @@ export const TeamManagementModal: React.FC<TeamManagementModalProps> = ({ isOpen
   const [passwordModalSuccess, setPasswordModalSuccess] = useState<string | null>(null);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
+  // Super Admin Account Deletion Warning Modal state
+  const [memberToDelete, setMemberToDelete] = useState<TeamMember | null>(null);
+  const [isDeletingMember, setIsDeletingMember] = useState(false);
+  const [deleteMemberError, setDeleteMemberError] = useState<string | null>(null);
+
+  const handleConfirmDeleteMember = async () => {
+    if (!memberToDelete) return;
+    setIsDeletingMember(true);
+    setDeleteMemberError(null);
+    try {
+      await removeTeamMember(memberToDelete.user_id);
+      setMemberToDelete(null);
+    } catch (err: any) {
+      setDeleteMemberError(err?.message || 'Failed to delete member account.');
+    } finally {
+      setIsDeletingMember(false);
+    }
+  };
+
   const togglePasswordReveal = (userId: string) => {
     setRevealedPasswords((prev) => ({ ...prev, [userId]: !prev[userId] }));
   };
@@ -746,14 +765,19 @@ ${isSuperAdmin ? `- Password: ${pwd}` : ''}
                             </button>
                           )}
                           {member.role !== 'super_admin' ? (
-                            <button
-                              type="button"
-                              onClick={() => removeTeamMember(member.user_id)}
-                              className="p-1 rounded text-slate-400 hover:text-rose-600 transition"
-                              title="Remove user"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            isSuperAdmin ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDeleteMemberError(null);
+                                  setMemberToDelete(member);
+                                }}
+                                className="p-1 rounded text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                                title={`Delete ${member.display_name} account`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            ) : null
                           ) : (
                             <span className="text-[10px] text-slate-400 italic">Root Authority</span>
                           )}
@@ -1041,6 +1065,89 @@ ${isSuperAdmin ? `- Password: ${pwd}` : ''}
             </button>
           </div>
         </form>
+      </Modal>
+    )}
+
+    {/* Delete Account Warning Confirmation Modal */}
+    {memberToDelete && (
+      <Modal
+        isOpen={Boolean(memberToDelete)}
+        onClose={() => setMemberToDelete(null)}
+        title="Delete User Account?"
+        subtitle="Permanent account termination & session revocation"
+        maxWidth="md"
+      >
+        <div className="space-y-4 text-xs text-slate-800 dark:text-slate-100">
+          {deleteMemberError && (
+            <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 shrink-0" />
+              <span>{deleteMemberError}</span>
+            </div>
+          )}
+
+          <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <div className="font-bold text-rose-800 dark:text-rose-200">
+                Permanently delete {memberToDelete.display_name}'s account?
+              </div>
+              <div className="text-[11px] text-rose-700 dark:text-rose-300/90 leading-relaxed">
+                This action is irreversible. All login credentials, mobile PWA sessions, and workspace permissions will be terminated immediately.
+              </div>
+            </div>
+          </div>
+
+          {/* Member Details Summary Box */}
+          <div className="bg-slate-50 dark:bg-slate-900/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-slate-500">User Name:</span>
+              <span className="font-bold text-slate-900 dark:text-slate-100">{memberToDelete.display_name}</span>
+            </div>
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-slate-500">Email:</span>
+              <span className="font-mono text-slate-700 dark:text-slate-300">{memberToDelete.email}</span>
+            </div>
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-slate-500">Role & Designation:</span>
+              <span className="font-semibold text-slate-900 dark:text-slate-100">
+                {memberToDelete.role.toUpperCase()} • {memberToDelete.designation || 'Specialist'}
+              </span>
+            </div>
+          </div>
+
+          {/* Important Warnings List */}
+          <div className="space-y-1.5 text-[11px] text-slate-600 dark:text-slate-400 bg-amber-50/60 dark:bg-amber-950/20 p-3 rounded-lg border border-amber-200 dark:border-amber-900/40">
+            <div className="flex items-center gap-1.5 font-semibold text-amber-800 dark:text-amber-300">
+              <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+              <span>PWA & Security Enforcement Notice:</span>
+            </div>
+            <ul className="list-disc pl-4 space-y-1 text-slate-700 dark:text-slate-300">
+              <li>Active sessions on mobile PWA apps and browsers will be instantly signed out.</li>
+              <li>All team members and project channels will receive a security deletion notice.</li>
+              <li>Historical messages and approved deliverables will remain preserved for audit compliance.</li>
+            </ul>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => setMemberToDelete(null)}
+              className="px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={isDeletingMember}
+              onClick={handleConfirmDeleteMember}
+              className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition shadow-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>{isDeletingMember ? 'Deleting Account...' : 'Confirm Permanent Deletion'}</span>
+            </button>
+          </div>
+        </div>
       </Modal>
     )}
     </>

@@ -8,6 +8,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { UserRole, UserProfile, DesignationRequest } from '../../types';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase/client';
+import { canUpdateUserPassword, canDeleteUserAccount } from '../../lib/auth/authorization';
 
 export interface TeamMember {
   user_id: string;
@@ -834,6 +835,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  // Listen for account deletion broadcasts on PWA and browser tabs
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('BroadcastChannel' in window)) return;
+    const channel = new BroadcastChannel('accelvia_sync_channel');
+
+    channel.onmessage = (event) => {
+      const data = event.data;
+      if (!data || !data.type) return;
+
+      if (data.type === 'USER_DELETED') {
+        if (data.userId === session.userId) {
+          try {
+            localStorage.setItem(
+              'accelvia_account_terminated_notice',
+              JSON.stringify({
+                deletedBy: data.deletedBy || 'Super Admin',
+                deletedName: data.deletedName,
+                time: new Date().toISOString(),
+              })
+            );
+          } catch {}
+          logout();
+        } else {
+          setTeamMembers((prev) => prev.filter((m) => m.user_id !== data.userId));
+        }
+      }
+    };
+
+    return () => {
+      channel.close();
+    };
+  }, [session.userId, logout]);
+
   // Super Admin: Direct Provision Team Member
   const addTeamMember = useCallback(
     async (member: { display_name: string; email: string; role: UserRole; password?: string }): Promise<TeamMember> => {
@@ -870,25 +904,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     []
   );
 
-  // Super Admin: Remove Team Member
-  const removeTeamMember = useCallback(async (userId: string) => {
-    setTeamMembers((prev) => prev.filter((m) => m.user_id !== userId));
+  // Super Admin: Remove Team Member with Cross-Device Session Termination & Broadcast Alert
+  const removeTeamMember = useCallback(
+    async (userId: string) => {
+      const memberToDelete = teamMembers.find((m) => m.user_id === userId);
 
-    if (isSupabaseConfigured) {
-      try {
-        await supabase.from('app_users').delete().eq('id', userId);
-      } catch (e) {
-        console.warn('Could not remove user from Supabase:', e);
+      // Strict Role Enforcement: Only Super Admin can delete team accounts
+      if (!canDeleteUserAccount(currentRole, memberToDelete?.role || 'member')) {
+        throw new Error('Unauthorized: Only Super Admin can delete team accounts.');
       }
-    }
-  }, []);
 
-  // Super Admin: Edit and update any user password
+      setTeamMembers((prev) => prev.filter((m) => m.user_id !== userId));
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from('app_users').delete().eq('id', userId);
+        } catch (e) {
+          console.warn('Could not remove user from Supabase:', e);
+        }
+      }
+
+      // Broadcast across all PWA instances and open browser tabs
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        try {
+          const channel = new BroadcastChannel('accelvia_sync_channel');
+          channel.postMessage({
+            type: 'USER_DELETED',
+            userId,
+            deletedName: memberToDelete?.display_name || 'Team Member',
+            deletedEmail: memberToDelete?.email || '',
+            deletedRole: memberToDelete?.role || 'member',
+            deletedBy: currentUser.display_name,
+          });
+          channel.close();
+        } catch (err) {
+          console.warn('BroadcastChannel error on removeTeamMember:', err);
+        }
+      }
+    },
+    [teamMembers, currentRole, currentUser.display_name]
+  );
+
+  // Change Password: Super Admin can update any user; Admin and Member can ONLY update their designated account
   const updateUserPassword = useCallback(
     async (userId: string, newPassword: string): Promise<{ success: boolean; error?: string }> => {
       const trimmed = newPassword.trim();
       if (!trimmed || trimmed.length < 6) {
         return { success: false, error: 'Password must be at least 6 characters long.' };
+      }
+
+      // Strict Role Rule: Admin and Member can ONLY update their own designated account
+      if (!canUpdateUserPassword(currentRole, userId, currentUser.user_id)) {
+        return {
+          success: false,
+          error: 'Unauthorized: Admins and Members can only update the password for their own designated account.',
+        };
       }
 
       // Update in Supabase central database
@@ -917,9 +987,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         prev.map((m) => (m.user_id === userId ? { ...m, password: trimmed } : m))
       );
 
+      // If user updated their own password, synchronize current session storage
+      if (userId === currentUser.user_id) {
+        try {
+          const authData = localStorage.getItem(STORAGE_KEY_AUTH);
+          if (authData) {
+            const parsed = JSON.parse(authData);
+            parsed.password = trimmed;
+            localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(parsed));
+          }
+          if (currentRole === 'super_admin') {
+            const saData = localStorage.getItem(STORAGE_KEY_SUPER_ADMIN);
+            if (saData) {
+              const parsed = JSON.parse(saData);
+              parsed.password = trimmed;
+              localStorage.setItem(STORAGE_KEY_SUPER_ADMIN, JSON.stringify(parsed));
+            }
+          }
+        } catch {}
+      }
+
+      // Broadcast password update notice across tabs (without exposing plain password over channel)
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        try {
+          const target = teamMembers.find((m) => m.user_id === userId);
+          const channel = new BroadcastChannel('accelvia_sync_channel');
+          channel.postMessage({
+            type: 'PASSWORD_UPDATED',
+            userId,
+            userName: target?.display_name || currentUser.display_name,
+            updatedBy: currentUser.display_name,
+          });
+          channel.close();
+        } catch {}
+      }
+
       return { success: true };
     },
-    []
+    [currentRole, currentUser.user_id, currentUser.display_name, teamMembers]
   );
 
   // Self-Service: All Admins & Members can change their own name immediately

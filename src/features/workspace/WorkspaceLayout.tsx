@@ -638,6 +638,51 @@ export const WorkspaceLayout: React.FC = () => {
           }
         }
       }
+
+      if (data.type === 'USER_DELETED') {
+        // If current logged-in user is the one deleted
+        if (data.userId === currentUser.user_id) {
+          logout();
+          alert(`⚠️ Account Terminated: Your account was deleted by Super Admin (${data.deletedBy}). You have been signed out.`);
+          return;
+        }
+
+        // For other users: broadcast security notice
+        notify({
+          title: `⚠️ Team Member Removed`,
+          body: `Account for ${data.deletedName} (${data.deletedRole}) was permanently deleted by ${data.deletedBy}.`,
+          category: 'system',
+          priority: 'high',
+        });
+
+        // Record audit event
+        const auditEntry: AuditEvent = {
+          id: `audit-${Date.now()}`,
+          organization_id: 'org-1',
+          actor_user_id: data.deletedBy,
+          actor_role_snapshot: 'super_admin',
+          entity_type: 'user_account',
+          entity_id: data.userId,
+          action: 'DELETE_USER_ACCOUNT',
+          before_state: { name: data.deletedName, role: data.deletedRole, email: data.deletedEmail },
+          after_state: null,
+          reason: `User account permanently deleted by Super Admin (${data.deletedBy})`,
+          server_recorded_at: new Date().toISOString(),
+          source: 'ui',
+        };
+        setAuditEvents((a) => [auditEntry, ...a]);
+      }
+
+      if (data.type === 'PASSWORD_UPDATED') {
+        if (data.userId === currentUser.user_id) {
+          notify({
+            title: `🔑 Password Changed`,
+            body: `Your account password was successfully updated by ${data.updatedBy}.`,
+            category: 'system',
+            priority: 'high',
+          });
+        }
+      }
     };
 
     return () => {
