@@ -107,6 +107,7 @@ const INITIAL_TEAM_MEMBERS: TeamMember[] = [
     display_name: 'Super Admin (Ahmed)',
     email: 'gravityahmed11@gmail.com',
     role: 'super_admin',
+    password: 'Alpha@@2026',
     status: 'active',
     created_at: '2026-10-30T00:00:00Z',
   },
@@ -115,6 +116,7 @@ const INITIAL_TEAM_MEMBERS: TeamMember[] = [
     display_name: 'Musfiqur Rahman (QA)',
     email: 'musfiqurrahmanqa@gmail.com',
     role: 'admin',
+    password: 'Password123!',
     status: 'active',
     created_at: '2026-10-30T00:00:00Z',
   },
@@ -123,6 +125,7 @@ const INITIAL_TEAM_MEMBERS: TeamMember[] = [
     display_name: 'Musfiqur Rahman (QA)',
     email: 'musfiqurrahmansqa@gmail.com',
     role: 'admin',
+    password: 'Password123!',
     status: 'active',
     created_at: '2026-10-30T00:00:00Z',
   },
@@ -131,6 +134,7 @@ const INITIAL_TEAM_MEMBERS: TeamMember[] = [
     display_name: 'Executive Director',
     email: 'superadmin@accelvia.internal',
     role: 'super_admin',
+    password: 'Alpha@@2026',
     status: 'active',
     created_at: '2026-10-30T00:00:00Z',
   },
@@ -139,6 +143,7 @@ const INITIAL_TEAM_MEMBERS: TeamMember[] = [
     display_name: 'Sarah Connor',
     email: 'admin@accelvia.internal',
     role: 'admin',
+    password: 'Password123!',
     status: 'active',
     created_at: '2026-10-30T00:00:00Z',
   },
@@ -147,6 +152,7 @@ const INITIAL_TEAM_MEMBERS: TeamMember[] = [
     display_name: 'Dev Alex',
     email: 'member@accelvia.internal',
     role: 'member',
+    password: 'Password123!',
     status: 'active',
     created_at: '2026-10-30T00:00:00Z',
   },
@@ -882,7 +888,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         created_at: new Date().toISOString(),
       };
 
-      setTeamMembers((prev) => [{ ...newMember, password: undefined }, ...prev]);
+      setTeamMembers((prev) => [newMember, ...prev]);
 
       if (isSupabaseConfigured) {
         try {
