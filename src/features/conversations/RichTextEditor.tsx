@@ -43,6 +43,10 @@ import {
   Pause,
   X,
   FileText,
+  Minimize2,
+  Maximize2,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 interface RichTextEditorProps {
@@ -54,6 +58,8 @@ interface RichTextEditorProps {
   placeholder?: string;
   disabled?: boolean;
   teamMembers?: TeamMember[];
+  isMinimized?: boolean;
+  onToggleMinimize?: (minimized: boolean) => void;
 }
 
 interface MentionState {
@@ -68,10 +74,20 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   placeholder = 'Write a message... Type @ to mention a team member. (Ctrl+Enter to send)',
   disabled = false,
   teamMembers: propTeamMembers,
+  isMinimized: controlledMinimized,
+  onToggleMinimize,
 }) => {
   const { teamMembers: contextTeamMembers } = useAuth();
   const { accentColor } = useTheme();
   const availableMembers = propTeamMembers || contextTeamMembers || [];
+
+  const [internalMinimized, setInternalMinimized] = useState(false);
+  const isMinimized = controlledMinimized !== undefined ? controlledMinimized : internalMinimized;
+
+  const handleSetMinimized = (val: boolean) => {
+    setInternalMinimized(val);
+    onToggleMinimize?.(val);
+  };
 
   const [attachments, setAttachments] = useState<File[]>([]);
   const [uploadError, setUploadError] = useState<{ error: string; recommendation?: string } | null>(null);
@@ -304,6 +320,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       return;
     }
 
+    handleSetMinimized(false);
+
     if (!isSpeechRecognitionSupported()) {
       setUploadError({
         error: 'Speech Recognition is not available in this browser.',
@@ -340,6 +358,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
   // Start Mode 2: Voice Note Audio Recording
   const startVoiceRecording = async () => {
+    handleSetMinimized(false);
+
     if (isDictating) {
       dictationEngineRef.current?.stop();
       setIsDictating(false);
@@ -488,6 +508,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           error: validation.error || 'File validation failed',
           recommendation: validation.recommendation,
         });
+        handleSetMinimized(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
@@ -495,8 +516,15 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
     setUploadError(null);
     setAttachments((prev) => [...prev, ...files]);
+    handleSetMinimized(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
+
+  const canSend = Boolean(
+    (editor && !editor.isEmpty) ||
+    attachments.length > 0 ||
+    Boolean(pendingVoiceNote)
+  );
 
   const insertTable = () => {
     editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
@@ -522,17 +550,125 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const visualizerMultipliers = [0.4, 0.7, 0.5, 0.85, 0.35, 0.75, 1.0, 0.6, 0.9, 0.45, 0.8, 0.95, 0.3, 0.65, 0.55, 0.85];
 
   return (
-    <div className="relative border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/90 rounded-xl focus-within:border-emerald-500/50 dark:focus-within:border-teal-500/50 shadow-sm transition">
-      {/* Floating Mention Autocomplete Popover */}
-      {mentionState?.isOpen && (
-        <MentionPopover
-          query={mentionState.query}
-          candidates={mentionState.filteredCandidates}
-          selectedIndex={selectedIndex}
-          onSelect={handleSelectCandidate}
-          onClose={() => setMentionState(null)}
-        />
+    <div
+      className={`relative border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl focus-within:border-emerald-500/50 dark:focus-within:border-teal-500/50 shadow-sm transition-all duration-200 ${
+        isMinimized ? 'hover:border-slate-300 dark:hover:border-slate-700' : ''
+      }`}
+    >
+      {/* Minimized Compact Bar */}
+      {isMinimized && (
+        <div className="flex items-center gap-1.5 sm:gap-2 p-1.5 sm:p-2 animate-fadeIn">
+          {/* Clickable preview / expand trigger button */}
+          <button
+            type="button"
+            onClick={() => {
+              handleSetMinimized(false);
+              setTimeout(() => editor?.commands.focus(), 60);
+            }}
+            className="flex-1 min-w-0 flex items-center gap-2 text-left px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-950/60 hover:bg-slate-100 dark:hover:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 transition group cursor-text"
+            title="Click or press Enter to expand writing area"
+            aria-label="Expand message editor"
+          >
+            <Maximize2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-500 dark:group-hover:text-teal-400 shrink-0 transition" />
+            <span className="truncate flex-1 font-normal text-xs">
+              {editor && !editor.isEmpty ? (
+                <span className="text-slate-800 dark:text-slate-200 font-medium">
+                  {editor.getText() || 'Message drafted...'}
+                </span>
+              ) : (
+                <span className="text-slate-400 dark:text-slate-500">
+                  Write a message... <span className="hidden sm:inline">(Click to expand)</span>
+                </span>
+              )}
+            </span>
+
+            {/* Badges for pending items */}
+            {attachments.length > 0 && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-teal-300 px-2 py-0.5 rounded-full shrink-0">
+                <Paperclip className="w-3 h-3" />
+                <span>{attachments.length}</span>
+              </span>
+            )}
+            {pendingVoiceNote && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-teal-100 text-teal-800 dark:bg-teal-950/80 dark:text-teal-300 px-2 py-0.5 rounded-full shrink-0">
+                <span>🎙️ Note</span>
+              </span>
+            )}
+          </button>
+
+          {/* Quick action buttons on minimized bar */}
+          <div className="flex items-center gap-1 shrink-0">
+            {/* Quick Attach */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-emerald-600 dark:hover:text-teal-400 transition cursor-pointer"
+              title="Attach Image or File"
+              aria-label="Attach files"
+            >
+              <Paperclip className="w-4 h-4" />
+            </button>
+
+            {/* Quick Dictate */}
+            <button
+              type="button"
+              onClick={() => {
+                handleSetMinimized(false);
+                toggleDictation();
+              }}
+              className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-emerald-600 dark:hover:text-teal-400 transition cursor-pointer"
+              title="Voice Dictation (Speech to text)"
+              aria-label="Voice Dictation"
+            >
+              <Mic className="w-4 h-4" />
+            </button>
+
+            {/* Quick Send if message has content */}
+            {canSend && (
+              <button
+                type="button"
+                onClick={handleSend}
+                disabled={disabled}
+                className="inline-flex items-center gap-1 text-white font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg text-xs shadow-sm active:scale-95 transition cursor-pointer shrink-0"
+                style={{ backgroundColor: accentColor }}
+                title="Send message"
+                aria-label="Send message"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Send</span>
+              </button>
+            )}
+
+            {/* Maximize Button */}
+            <button
+              type="button"
+              onClick={() => {
+                handleSetMinimized(false);
+                setTimeout(() => editor?.commands.focus(), 60);
+              }}
+              className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition flex items-center gap-1 text-xs cursor-pointer shrink-0"
+              title="Maximize writing area"
+              aria-label="Maximize writing area"
+            >
+              <ChevronUp className="w-4 h-4" />
+              <span className="hidden md:inline font-medium text-[11px]">Maximize</span>
+            </button>
+          </div>
+        </div>
       )}
+
+      {/* Full Expanded Editor Container */}
+      <div className={isMinimized ? 'hidden' : 'block'}>
+        {/* Floating Mention Autocomplete Popover */}
+        {mentionState?.isOpen && (
+          <MentionPopover
+            query={mentionState.query}
+            candidates={mentionState.filteredCandidates}
+            selectedIndex={selectedIndex}
+            onSelect={handleSelectCandidate}
+            onClose={() => setMentionState(null)}
+          />
+        )}
 
       {/* Formatting Toolbar */}
       <div className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/40 text-slate-600 dark:text-slate-400 overflow-x-auto no-scrollbar">
@@ -664,8 +800,20 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           <span className="font-medium hidden sm:inline">Voice Note</span>
         </button>
 
-        <div className="hidden sm:block ml-auto text-xs text-slate-500 font-mono shrink-0">
-          Ctrl+Enter to send
+        <div className="ml-auto flex items-center gap-1.5 shrink-0 pl-1">
+          <span className="hidden lg:inline text-xs text-slate-400 dark:text-slate-500 font-mono">
+            Ctrl+Enter to send
+          </span>
+          <button
+            type="button"
+            onClick={() => handleSetMinimized(true)}
+            className="p-1 sm:px-2 py-1 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 transition flex items-center gap-1 text-xs shrink-0 cursor-pointer"
+            title="Minimize writing area (view full chat)"
+            aria-label="Minimize writing area"
+          >
+            <Minimize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline font-medium text-[11px]">Minimize</span>
+          </button>
         </div>
       </div>
 
@@ -867,17 +1015,30 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           <span className="font-medium text-slate-600 dark:text-slate-300"> Dictate</span> for speech-to-text • 
           <span className="font-medium text-slate-600 dark:text-slate-300"> Voice Note</span> for audio
         </div>
-        <button
-          type="button"
-          onClick={handleSend}
-          disabled={disabled || isRecordingVoice}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 text-white font-semibold px-4 py-2 sm:py-1.5 rounded-lg text-xs transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md active:scale-95 shrink-0 cursor-pointer"
-          style={{ backgroundColor: accentColor }}
-        >
-          <Send className="w-3.5 h-3.5" />
-          <span>Send Message</span>
-        </button>
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <button
+            type="button"
+            onClick={() => handleSetMinimized(true)}
+            className="sm:hidden px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-medium flex items-center gap-1 shrink-0 cursor-pointer"
+            title="Minimize writing area"
+            aria-label="Minimize writing area"
+          >
+            <ChevronDown className="w-3.5 h-3.5" />
+            <span>Minimize</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleSend}
+            disabled={disabled || isRecordingVoice}
+            className="flex-1 sm:flex-initial sm:w-auto inline-flex items-center justify-center gap-1.5 text-white font-semibold px-4 py-2 sm:py-1.5 rounded-lg text-xs transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md active:scale-95 shrink-0 cursor-pointer"
+            style={{ backgroundColor: accentColor }}
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>Send Message</span>
+          </button>
+        </div>
       </div>
     </div>
+  </div>
   );
 };

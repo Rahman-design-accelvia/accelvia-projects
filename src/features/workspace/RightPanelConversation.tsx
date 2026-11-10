@@ -89,6 +89,7 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
   // Edit message modal state
   const [editingMessage, setEditingMessage] = useState<SafeMessage | null>(null);
   const [editText, setEditText] = useState('');
+  const [isInputMinimized, setIsInputMinimized] = useState(false);
 
   const handleStartEdit = (msg: SafeMessage) => {
     setEditingMessage(msg);
@@ -426,8 +427,17 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
       </div>
 
       {/* Message Input Composer */}
-      <div className="p-2.5 sm:p-4 border-t border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/80">
-        <RichTextEditor onSendMessage={onSendMessage} teamMembers={activeTeamMembers} />
+      <div
+        className={`${
+          isInputMinimized ? 'p-1.5 sm:p-2.5' : 'p-2 sm:p-4'
+        } border-t border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/80 transition-all duration-200`}
+      >
+        <RichTextEditor
+          onSendMessage={onSendMessage}
+          teamMembers={activeTeamMembers}
+          isMinimized={isInputMinimized}
+          onToggleMinimize={setIsInputMinimized}
+        />
       </div>
 
       {/* Edit Message Modal */}
