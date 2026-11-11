@@ -125,6 +125,53 @@ export function extractMessageSnippet(contentJson: Record<string, unknown>): str
   return 'New message in conversation thread';
 }
 
+/**
+ * Isolated live dual-clock component.
+ * By keeping the 1-second interval self-contained, WorkspaceLayout NEVER re-renders on clock ticks!
+ */
+const TopNavDualClock: React.FC<{ timezone: string }> = ({ timezone }) => {
+  const [time, setTime] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const dualTime = useMemo(() => formatDualTime(time, timezone), [time, timezone]);
+
+  return (
+    <>
+      {/* Full display for 15"+ laptop screens (xl and 2xl) */}
+      <div className="hidden xl:flex items-center gap-4 text-xs font-mono bg-slate-100/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/80 px-3 py-1 rounded-full text-slate-700 dark:text-slate-300 shrink-0">
+        <div className="flex items-center gap-1.5">
+          <Globe className="w-3.5 h-3.5 text-blue-600 dark:text-cyan-400" />
+          <span>Project ({dualTime.clientTzAbbrev}):</span>
+          <span className="text-slate-900 dark:text-slate-100 font-semibold">{dualTime.clientTime}</span>
+        </div>
+        <span className="text-slate-300 dark:text-slate-600">|</span>
+        <div className="flex items-center gap-1.5">
+          <Clock className="w-3.5 h-3.5 text-emerald-600 dark:text-teal-400" />
+          <span>Bangladesh (BST):</span>
+          <span className="text-emerald-700 dark:text-teal-300 font-semibold">{dualTime.bangladeshTime}</span>
+        </div>
+      </div>
+
+      {/* Compact display for tablet / 13" laptop (md to xl) */}
+      <div className="hidden md:flex xl:hidden items-center gap-2 text-xs font-mono bg-slate-100/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/80 px-2.5 py-1 rounded-full text-slate-700 dark:text-slate-300 shrink-0">
+        <span className="text-blue-700 dark:text-cyan-300 font-semibold">{dualTime.clientTzAbbrev}: {dualTime.clientTime}</span>
+        <span className="text-slate-300 dark:text-slate-600">•</span>
+        <span className="text-emerald-700 dark:text-teal-300 font-semibold">BST: {dualTime.bangladeshTime}</span>
+      </div>
+
+      {/* Mobile Mini Clock chip (sm to md) */}
+      <div className="hidden sm:flex md:hidden items-center gap-1 text-[11px] font-mono bg-slate-100/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/80 px-2 py-0.5 rounded-full text-emerald-700 dark:text-teal-300 shrink-0">
+        <Clock className="w-3 h-3 text-emerald-600 dark:text-teal-400" />
+        <span>{dualTime.bangladeshTime}</span>
+      </div>
+    </>
+  );
+};
+
 export const WorkspaceLayout: React.FC = () => {
   const { currentRole, currentUser, isSuperAdmin, isAdmin, isMember, isAuthenticated, logout, pendingRegistrations, teamMembers, canViewMoney, pendingDesignationRequests, mustChangePassword } = useAuth();
   const { theme, toggleTheme, isDark, preset, accentColor } = useTheme();
@@ -298,27 +345,49 @@ export const WorkspaceLayout: React.FC = () => {
   const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false);
   const [isScopePanelCollapsed, setIsScopePanelCollapsed] = useState(false);
 
-  // Active project and assigned client company
-  const activeProject: Project | null = projects.find((p) => p.id === selectedProjectId) || projects[0] || null;
-  const activeClient: Client | null = activeProject?.client_id
-    ? clients.find((c) => c.id === activeProject.client_id) || null
-    : null;
-  const activeFinancials = activeProject ? financials[activeProject.id] : undefined;
-  const activePackages = activeProject ? packages.filter((p) => p.project_id === activeProject.id) : [];
-  const activeVersions = versions.filter((v) =>
-    activePackages.some((pkg) => pkg.id === v.scope_package_id)
-  );
-  const activeWorkOrders = activeProject ? workOrders.filter((wo) => wo.project_id === activeProject.id) : [];
+  // Active project and assigned client company (memoized for reference stability)
+  const activeProject: Project | null = useMemo(() => {
+    return projects.find((p) => p.id === selectedProjectId) || projects[0] || null;
+  }, [projects, selectedProjectId]);
+
+  const activeClient: Client | null = useMemo(() => {
+    if (!activeProject?.client_id) return null;
+    return clients.find((c) => c.id === activeProject.client_id) || null;
+  }, [activeProject?.client_id, clients]);
+
+  const activeFinancials = useMemo(() => {
+    return activeProject ? financials[activeProject.id] : undefined;
+  }, [activeProject, financials]);
+
+  const activePackages = useMemo(() => {
+    return activeProject ? packages.filter((p) => p.project_id === activeProject.id) : [];
+  }, [activeProject, packages]);
+
+  const activeVersions = useMemo(() => {
+    return versions.filter((v) =>
+      activePackages.some((pkg) => pkg.id === v.scope_package_id)
+    );
+  }, [versions, activePackages]);
+
+  const activeWorkOrders = useMemo(() => {
+    return activeProject ? workOrders.filter((wo) => wo.project_id === activeProject.id) : [];
+  }, [activeProject, workOrders]);
+
   const activeMessages = useMemo(() => {
     return filterMessagesForProject(messages, activeProject?.id || '');
   }, [messages, activeProject?.id]);
 
   // Authoritative approved hours for mobile badge
-  const packagesWithVersions = activePackages.map((pkg) => ({
-    ...pkg,
-    versions: versions.filter((v) => v.scope_package_id === pkg.id),
-  }));
-  const totalApprovedHours = calculateProjectApprovedHours(packagesWithVersions);
+  const packagesWithVersions = useMemo(() => {
+    return activePackages.map((pkg) => ({
+      ...pkg,
+      versions: versions.filter((v) => v.scope_package_id === pkg.id),
+    }));
+  }, [activePackages, versions]);
+
+  const totalApprovedHours = useMemo(() => {
+    return calculateProjectApprovedHours(packagesWithVersions);
+  }, [packagesWithVersions]);
 
   const handleSelectProject = (projectId: string) => {
     setSelectedProjectId(projectId);
@@ -326,12 +395,7 @@ export const WorkspaceLayout: React.FC = () => {
     setIsMobileDrawerOpen(false);
   };
 
-  // Live Bangladesh & Local clock in top nav
-  const [currentTimeInstant, setCurrentTimeInstant] = useState(new Date());
-  React.useEffect(() => {
-    const timer = setInterval(() => setCurrentTimeInstant(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  // Cache to track the last known cloud JSON state per key — prevents infinite echo loops & saves Supabase free tier quotas
 
   // Cache to track the last known cloud JSON state per key — prevents infinite echo loops & saves Supabase free tier quotas
   const lastCloudJson = useRef<Record<string, string>>({});
@@ -690,8 +754,6 @@ export const WorkspaceLayout: React.FC = () => {
       channel.close();
     };
   }, [currentUser.user_id, isSuperAdmin, notify]);
-
-  const topDualTime = formatDualTime(currentTimeInstant, activeProject?.timezone || 'Asia/Dhaka');
 
   // Handlers
   const handleCreateClient = (clientData: Partial<Client>) => {
@@ -2059,34 +2121,8 @@ export const WorkspaceLayout: React.FC = () => {
           </div>
         </div>
 
-        {/* Center Live Dual-Time Indicator */}
-        {/* Full display for 15"+ laptop screens (xl and 2xl) */}
-        <div className="hidden xl:flex items-center gap-4 text-xs font-mono bg-slate-100/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/80 px-3 py-1 rounded-full text-slate-700 dark:text-slate-300 shrink-0">
-          <div className="flex items-center gap-1.5">
-            <Globe className="w-3.5 h-3.5 text-blue-600 dark:text-cyan-400" />
-            <span>Project ({topDualTime.clientTzAbbrev}):</span>
-            <span className="text-slate-900 dark:text-slate-100 font-semibold">{topDualTime.clientTime}</span>
-          </div>
-          <span className="text-slate-300 dark:text-slate-600">|</span>
-          <div className="flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-emerald-600 dark:text-teal-400" />
-            <span>Bangladesh (BST):</span>
-            <span className="text-emerald-700 dark:text-teal-300 font-semibold">{topDualTime.bangladeshTime}</span>
-          </div>
-        </div>
-
-        {/* Compact display for tablet / 13" laptop (md to xl) */}
-        <div className="hidden md:flex xl:hidden items-center gap-2 text-xs font-mono bg-slate-100/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/80 px-2.5 py-1 rounded-full text-slate-700 dark:text-slate-300 shrink-0">
-          <span className="text-blue-700 dark:text-cyan-300 font-semibold">{topDualTime.clientTzAbbrev}: {topDualTime.clientTime}</span>
-          <span className="text-slate-300 dark:text-slate-600">•</span>
-          <span className="text-emerald-700 dark:text-teal-300 font-semibold">BST: {topDualTime.bangladeshTime}</span>
-        </div>
-
-        {/* Mobile Mini Clock chip (sm to md) */}
-        <div className="hidden sm:flex md:hidden items-center gap-1 text-[11px] font-mono bg-slate-100/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/80 px-2 py-0.5 rounded-full text-emerald-700 dark:text-teal-300 shrink-0">
-          <Clock className="w-3 h-3 text-emerald-600 dark:text-teal-400" />
-          <span>{topDualTime.bangladeshTime}</span>
-        </div>
+        {/* Center Live Dual-Time Indicator (Isolated into TopNavDualClock to prevent root re-renders) */}
+        <TopNavDualClock timezone={activeProject?.timezone || 'Asia/Dhaka'} />
 
         {/* Right Section: Push Notification Center, Theme Switcher, Role Switcher & User Profile */}
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
