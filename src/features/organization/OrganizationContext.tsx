@@ -4,9 +4,9 @@
 // - Admin proposed company name submission & tracking
 // - Super Admin review, approval, rejection, editing, direct updates, and deletion
 // - Full audit history for all company name operations
-// - Cross-tab and real-time synchronization
+// - Cross-tab and real-time synchronization (Supabase-backed for cross-user/cross-device)
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   CompanyNameRequest,
   CompanyNameAuditRecord,
@@ -20,6 +20,7 @@ import {
   canDirectlyUpdateCompanyName,
   canDeleteCompanyNameRequest,
 } from '../../lib/auth/authorization';
+import { supabase, isSupabaseConfigured } from '../../lib/supabase/client';
 
 export interface OrganizationSettings {
   companyName: string;
@@ -31,6 +32,11 @@ export interface OrganizationSettings {
 export const STORAGE_KEY_ORG = 'accelvia_organization_settings_v1';
 export const STORAGE_KEY_COMPANY_REQUESTS = 'accelvia_company_name_requests_v1';
 export const STORAGE_KEY_COMPANY_AUDIT = 'accelvia_company_name_audit_v1';
+
+// Supabase keys used in app_workspace_data table
+const SUPABASE_KEY_ORG_SETTINGS = 'org_settings';
+const SUPABASE_KEY_COMPANY_REQUESTS = 'company_name_requests';
+const SUPABASE_KEY_COMPANY_AUDIT = 'company_name_audit';
 
 export const DEFAULT_ORG_SETTINGS: OrganizationSettings = {
   companyName: 'Rahman Design',
@@ -136,28 +142,130 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [companyRequests, setCompanyRequests] = useState<CompanyNameRequest[]>(() => getStoredCompanyRequests());
   const [companyAuditHistory, setCompanyAuditHistory] = useState<CompanyNameAuditRecord[]>(() => getStoredCompanyAuditHistory());
 
-  // Save settings to localStorage
-  useEffect(() => {
+  // Track last Supabase-synced JSON to avoid echo loops (same pattern as WorkspaceLayout)
+  const lastCloudJson = useRef<Record<string, string>>({});
+
+  // ─── Supabase: persist to cloud & update localStorage ─────────────────────
+
+  const upsertToSupabase = useCallback(async (key: string, value: unknown) => {
+    if (!isSupabaseConfigured) return;
+    const currentJson = JSON.stringify(value);
+    if (lastCloudJson.current[key] === currentJson) return; // skip unchanged
+    lastCloudJson.current[key] = currentJson;
     try {
-      localStorage.setItem(STORAGE_KEY_ORG, JSON.stringify(settings));
-    } catch {}
+      await supabase.from('app_workspace_data').upsert({
+        key,
+        value,
+        updated_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.warn(`[OrgSync] Could not upsert ${key} to Supabase:`, e);
+    }
+  }, []);
+
+  // ─── Persist to localStorage (always) ─────────────────────────────────────
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY_ORG, JSON.stringify(settings)); } catch {}
   }, [settings]);
 
-  // Save requests to localStorage
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_COMPANY_REQUESTS, JSON.stringify(companyRequests));
-    } catch {}
+    try { localStorage.setItem(STORAGE_KEY_COMPANY_REQUESTS, JSON.stringify(companyRequests)); } catch {}
   }, [companyRequests]);
 
-  // Save audit history to localStorage
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_COMPANY_AUDIT, JSON.stringify(companyAuditHistory));
-    } catch {}
+    try { localStorage.setItem(STORAGE_KEY_COMPANY_AUDIT, JSON.stringify(companyAuditHistory)); } catch {}
   }, [companyAuditHistory]);
 
-  // Cross-tab synchronization via BroadcastChannel
+  // ─── Supabase: initial fetch on mount ─────────────────────────────────────
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('app_workspace_data')
+          .select('*')
+          .in('key', [SUPABASE_KEY_ORG_SETTINGS, SUPABASE_KEY_COMPANY_REQUESTS, SUPABASE_KEY_COMPANY_AUDIT]);
+
+        if (error || !Array.isArray(data)) return;
+
+        data.forEach((row) => {
+          const valJson = JSON.stringify(row.value);
+          lastCloudJson.current[row.key] = valJson;
+
+          if (row.key === SUPABASE_KEY_ORG_SETTINGS && row.value && typeof row.value === 'object') {
+            const incoming = row.value as OrganizationSettings;
+            if (incoming.companyName && incoming.companyName.trim()) {
+              setSettings({ ...DEFAULT_ORG_SETTINGS, ...incoming, companyName: incoming.companyName.trim() });
+              try { localStorage.setItem(STORAGE_KEY_ORG, valJson); } catch {}
+            }
+          } else if (row.key === SUPABASE_KEY_COMPANY_REQUESTS && Array.isArray(row.value)) {
+            setCompanyRequests(row.value as CompanyNameRequest[]);
+            try { localStorage.setItem(STORAGE_KEY_COMPANY_REQUESTS, valJson); } catch {}
+          } else if (row.key === SUPABASE_KEY_COMPANY_AUDIT && Array.isArray(row.value)) {
+            setCompanyAuditHistory(row.value as CompanyNameAuditRecord[]);
+            try { localStorage.setItem(STORAGE_KEY_COMPANY_AUDIT, valJson); } catch {}
+          }
+        });
+      } catch (e) {
+        console.warn('[OrgSync] Initial fetch failed:', e);
+      }
+    })();
+  }, []);
+
+  // ─── Supabase: Realtime subscription for cross-user/cross-device sync ─────
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    const channel = supabase
+      .channel('org_settings_realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'app_workspace_data' },
+        (payload) => {
+          const key = (payload.new as Record<string, unknown>)?.key as string;
+          const value = (payload.new as Record<string, unknown>)?.value;
+          if (!key || value === undefined) return;
+
+          // Only handle org-related keys
+          if (
+            key !== SUPABASE_KEY_ORG_SETTINGS &&
+            key !== SUPABASE_KEY_COMPANY_REQUESTS &&
+            key !== SUPABASE_KEY_COMPANY_AUDIT
+          ) return;
+
+          const incomingJson = JSON.stringify(value);
+          // Drop self-echoes
+          if (lastCloudJson.current[key] === incomingJson) return;
+          lastCloudJson.current[key] = incomingJson;
+
+          if (key === SUPABASE_KEY_ORG_SETTINGS && value && typeof value === 'object') {
+            const incoming = value as OrganizationSettings;
+            if (incoming.companyName && incoming.companyName.trim()) {
+              setSettings({ ...DEFAULT_ORG_SETTINGS, ...incoming, companyName: incoming.companyName.trim() });
+              try { localStorage.setItem(STORAGE_KEY_ORG, incomingJson); } catch {}
+            }
+          } else if (key === SUPABASE_KEY_COMPANY_REQUESTS && Array.isArray(value)) {
+            setCompanyRequests(value as CompanyNameRequest[]);
+            try { localStorage.setItem(STORAGE_KEY_COMPANY_REQUESTS, incomingJson); } catch {}
+          } else if (key === SUPABASE_KEY_COMPANY_AUDIT && Array.isArray(value)) {
+            setCompanyAuditHistory(value as CompanyNameAuditRecord[]);
+            try { localStorage.setItem(STORAGE_KEY_COMPANY_AUDIT, incomingJson); } catch {}
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      try { supabase.removeChannel(channel); } catch {}
+    };
+  }, []);
+
+  // ─── Cross-tab BroadcastChannel (same browser, different tabs) ─────────────
+
   useEffect(() => {
     if (typeof window === 'undefined' || !('BroadcastChannel' in window)) return;
     const channel = new BroadcastChannel('accelvia_company_channel');
@@ -178,9 +286,7 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     };
 
     return () => {
-      try {
-        channel.close();
-      } catch {}
+      try { channel.close(); } catch {}
     };
   }, []);
 
@@ -194,20 +300,27 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   };
 
-  const addAuditRecord = (record: Omit<CompanyNameAuditRecord, 'id' | 'timestamp'>) => {
+  const addAuditRecord = useCallback((record: Omit<CompanyNameAuditRecord, 'id' | 'timestamp'>): CompanyNameAuditRecord => {
     const newRecord: CompanyNameAuditRecord = {
       ...record,
       id: `c-audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       timestamp: new Date().toISOString(),
     };
-    setCompanyAuditHistory((prev) => [newRecord, ...prev]);
-  };
+    setCompanyAuditHistory((prev) => {
+      const updated = [newRecord, ...prev];
+      // Persist to Supabase asynchronously
+      upsertToSupabase(SUPABASE_KEY_COMPANY_AUDIT, updated);
+      return updated;
+    });
+    return newRecord;
+  }, [upsertToSupabase]);
 
   const pendingCompanyRequests = useMemo(() => {
     return companyRequests.filter((r) => r.status === 'pending');
   }, [companyRequests]);
 
-  // Submit proposed company name request (Admins & Super Admins)
+  // ─── Submit proposed company name request (Admins & Super Admins) ──────────
+
   const submitCompanyNameRequest = useCallback(
     async (
       proposedName: string,
@@ -227,12 +340,10 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (cleanName.toLowerCase() === settings.companyName.toLowerCase()) {
         return { success: false, error: `"${cleanName}" is already the active company name.` };
       }
-      // Basic HTML / script injection defense
       if (/<[a-z][\s\S]*>/i.test(cleanName)) {
         return { success: false, error: 'Company name contains invalid characters.' };
       }
 
-      // Check if identical request is already pending
       const existingPending = companyRequests.find(
         (r) => r.status === 'pending' && r.proposed_name.toLowerCase() === cleanName.toLowerCase()
       );
@@ -251,9 +362,9 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         submitted_at: new Date().toISOString(),
       };
 
-      setCompanyRequests((prev) => [newRequest, ...prev]);
-
-      addAuditRecord({
+      const auditEntry: CompanyNameAuditRecord = {
+        id: `c-audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        timestamp: new Date().toISOString(),
         action: 'submit_request',
         previous_name: settings.companyName,
         new_name: cleanName,
@@ -262,16 +373,30 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         performed_by_role: applicant.role,
         target_request_id: newRequest.id,
         details: `Submitted proposed company name "${cleanName}" for Super Admin review.`,
+      };
+
+      setCompanyRequests((prev) => {
+        const updated = [newRequest, ...prev];
+        // Persist to Supabase so Super Admin sees it immediately
+        upsertToSupabase(SUPABASE_KEY_COMPANY_REQUESTS, updated);
+        return updated;
+      });
+
+      setCompanyAuditHistory((prev) => {
+        const updated = [auditEntry, ...prev];
+        upsertToSupabase(SUPABASE_KEY_COMPANY_AUDIT, updated);
+        return updated;
       });
 
       broadcastEvent('COMPANY_REQUEST_SUBMITTED', { requestId: newRequest.id });
 
       return { success: true, request: newRequest };
     },
-    [settings.companyName, companyRequests]
+    [settings.companyName, companyRequests, upsertToSupabase]
   );
 
-  // Approve submitted company name request (Super Admin ONLY)
+  // ─── Approve submitted company name request (Super Admin ONLY) ────────────
+
   const approveCompanyNameRequest = useCallback(
     async (
       requestId: string,
@@ -296,23 +421,19 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
 
       const previousName = settings.companyName;
+      const now = new Date().toISOString();
 
-      // 1. Update Global Active Company Name
+      // 1. Update Global Active Company Name & persist to Supabase
       setSettings((prev) => {
-        const updated: OrganizationSettings = {
-          ...prev,
-          companyName: finalName,
-        };
-        try {
-          localStorage.setItem(STORAGE_KEY_ORG, JSON.stringify(updated));
-        } catch {}
+        const updated: OrganizationSettings = { ...prev, companyName: finalName };
+        try { localStorage.setItem(STORAGE_KEY_ORG, JSON.stringify(updated)); } catch {}
+        upsertToSupabase(SUPABASE_KEY_ORG_SETTINGS, updated);
         return updated;
       });
 
-      // 2. Mark Request as Approved
-      const now = new Date().toISOString();
-      setCompanyRequests((prev) =>
-        prev.map((r) =>
+      // 2. Mark Request as Approved & persist to Supabase
+      setCompanyRequests((prev) => {
+        const updated = prev.map((r) =>
           r.id === requestId
             ? {
                 ...r,
@@ -324,11 +445,15 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 reviewed_at: now,
               }
             : r
-        )
-      );
+        );
+        upsertToSupabase(SUPABASE_KEY_COMPANY_REQUESTS, updated);
+        return updated;
+      });
 
-      // 3. Record in Audit History
-      addAuditRecord({
+      // 3. Record in Audit History & persist to Supabase
+      const auditEntry: CompanyNameAuditRecord = {
+        id: `c-audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        timestamp: now,
         action: 'approve_request',
         previous_name: previousName,
         new_name: finalName,
@@ -337,16 +462,22 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         performed_by_role: reviewer.role,
         target_request_id: requestId,
         details: `Approved company name request submitted by ${targetReq.requested_by_name}. Active name changed from "${previousName}" to "${finalName}".`,
+      };
+      setCompanyAuditHistory((prev) => {
+        const updated = [auditEntry, ...prev];
+        upsertToSupabase(SUPABASE_KEY_COMPANY_AUDIT, updated);
+        return updated;
       });
 
       broadcastEvent('COMPANY_NAME_UPDATED', { activeName: finalName });
 
       return { success: true };
     },
-    [companyRequests, settings.companyName]
+    [companyRequests, settings.companyName, upsertToSupabase]
   );
 
-  // Reject submitted company name request (Super Admin ONLY)
+  // ─── Reject submitted company name request (Super Admin ONLY) ─────────────
+
   const rejectCompanyNameRequest = useCallback(
     async (
       requestId: string,
@@ -366,8 +497,9 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
 
       const now = new Date().toISOString();
-      setCompanyRequests((prev) =>
-        prev.map((r) =>
+
+      setCompanyRequests((prev) => {
+        const updated = prev.map((r) =>
           r.id === requestId
             ? {
                 ...r,
@@ -379,11 +511,15 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 review_notes: reason?.trim() || undefined,
               }
             : r
-        )
-      );
+        );
+        upsertToSupabase(SUPABASE_KEY_COMPANY_REQUESTS, updated);
+        return updated;
+      });
 
-      // Note: Active company name remains UNCHANGED!
-      addAuditRecord({
+      // Active company name remains UNCHANGED
+      const auditEntry: CompanyNameAuditRecord = {
+        id: `c-audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        timestamp: now,
         action: 'reject_request',
         previous_name: settings.companyName,
         new_name: settings.companyName,
@@ -392,16 +528,22 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         performed_by_role: reviewer.role,
         target_request_id: requestId,
         details: `Rejected company name request for "${targetReq.proposed_name}" submitted by ${targetReq.requested_by_name}.${reason ? ` Reason: ${reason}` : ''}`,
+      };
+      setCompanyAuditHistory((prev) => {
+        const updated = [auditEntry, ...prev];
+        upsertToSupabase(SUPABASE_KEY_COMPANY_AUDIT, updated);
+        return updated;
       });
 
       broadcastEvent('COMPANY_REQUEST_SUBMITTED', { requestId });
 
       return { success: true };
     },
-    [companyRequests, settings.companyName]
+    [companyRequests, settings.companyName, upsertToSupabase]
   );
 
-  // Directly update active global company name (Super Admin ONLY)
+  // ─── Directly update active global company name (Super Admin ONLY) ─────────
+
   const directUpdateCompanyName = useCallback(
     async (
       newName: string,
@@ -428,13 +570,15 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           ...extraBranding,
           companyName: cleanName,
         };
-        try {
-          localStorage.setItem(STORAGE_KEY_ORG, JSON.stringify(updated));
-        } catch {}
+        try { localStorage.setItem(STORAGE_KEY_ORG, JSON.stringify(updated)); } catch {}
+        // Persist to Supabase so all users see the new branding immediately
+        upsertToSupabase(SUPABASE_KEY_ORG_SETTINGS, updated);
         return updated;
       });
 
-      addAuditRecord({
+      const auditEntry: CompanyNameAuditRecord = {
+        id: `c-audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        timestamp: new Date().toISOString(),
         action: 'direct_update',
         previous_name: previousName,
         new_name: cleanName,
@@ -442,16 +586,22 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         performed_by_name: updater.name,
         performed_by_role: updater.role,
         details: `Super Admin directly updated active global company name from "${previousName}" to "${cleanName}".`,
+      };
+      setCompanyAuditHistory((prev) => {
+        const updated = [auditEntry, ...prev];
+        upsertToSupabase(SUPABASE_KEY_COMPANY_AUDIT, updated);
+        return updated;
       });
 
       broadcastEvent('COMPANY_NAME_UPDATED', { activeName: cleanName });
 
       return { success: true };
     },
-    [settings]
+    [settings, upsertToSupabase]
   );
 
-  // Edit a pending request's proposed name before approval (Super Admin ONLY)
+  // ─── Edit a pending request's proposed name (Super Admin ONLY) ─────────────
+
   const editCompanyNameRequest = useCallback(
     async (
       requestId: string,
@@ -472,11 +622,15 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         return { success: false, error: 'Request not found.' };
       }
 
-      setCompanyRequests((prev) =>
-        prev.map((r) => (r.id === requestId ? { ...r, proposed_name: cleanName } : r))
-      );
+      setCompanyRequests((prev) => {
+        const updated = prev.map((r) => (r.id === requestId ? { ...r, proposed_name: cleanName } : r));
+        upsertToSupabase(SUPABASE_KEY_COMPANY_REQUESTS, updated);
+        return updated;
+      });
 
-      addAuditRecord({
+      const auditEntry: CompanyNameAuditRecord = {
+        id: `c-audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        timestamp: new Date().toISOString(),
         action: 'edit_request',
         previous_name: targetReq.proposed_name,
         new_name: cleanName,
@@ -485,14 +639,20 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         performed_by_role: editor.role,
         target_request_id: requestId,
         details: `Super Admin edited proposed name from "${targetReq.proposed_name}" to "${cleanName}".`,
+      };
+      setCompanyAuditHistory((prev) => {
+        const updated = [auditEntry, ...prev];
+        upsertToSupabase(SUPABASE_KEY_COMPANY_AUDIT, updated);
+        return updated;
       });
 
       return { success: true };
     },
-    [companyRequests]
+    [companyRequests, upsertToSupabase]
   );
 
-  // Delete a request or history entry (Super Admin ONLY)
+  // ─── Delete a request or history entry (Super Admin ONLY) ──────────────────
+
   const deleteCompanyNameRequest = useCallback(
     async (
       requestId: string,
@@ -507,9 +667,15 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         return { success: false, error: 'Request entry not found.' };
       }
 
-      setCompanyRequests((prev) => prev.filter((r) => r.id !== requestId));
+      setCompanyRequests((prev) => {
+        const updated = prev.filter((r) => r.id !== requestId);
+        upsertToSupabase(SUPABASE_KEY_COMPANY_REQUESTS, updated);
+        return updated;
+      });
 
-      addAuditRecord({
+      const auditEntry: CompanyNameAuditRecord = {
+        id: `c-audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        timestamp: new Date().toISOString(),
         action: 'delete_request',
         previous_name: targetReq.proposed_name,
         new_name: settings.companyName,
@@ -518,14 +684,20 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         performed_by_role: deleter.role,
         target_request_id: requestId,
         details: `Super Admin deleted request entry "${targetReq.proposed_name}" (${targetReq.status}).`,
+      };
+      setCompanyAuditHistory((prev) => {
+        const updated = [auditEntry, ...prev];
+        upsertToSupabase(SUPABASE_KEY_COMPANY_AUDIT, updated);
+        return updated;
       });
 
       return { success: true };
     },
-    [companyRequests, settings.companyName]
+    [companyRequests, settings.companyName, upsertToSupabase]
   );
 
-  // Legacy helper
+  // ─── Legacy helper ──────────────────────────────────────────────────────────
+
   const updateSettings = (newSettings: Partial<OrganizationSettings>) => {
     setSettings((prev) => {
       const nextName = (newSettings.companyName !== undefined ? newSettings.companyName : prev.companyName).trim();
@@ -534,18 +706,16 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         ...newSettings,
         companyName: nextName || 'My Company',
       };
-      try {
-        localStorage.setItem(STORAGE_KEY_ORG, JSON.stringify(updated));
-      } catch {}
+      try { localStorage.setItem(STORAGE_KEY_ORG, JSON.stringify(updated)); } catch {}
+      upsertToSupabase(SUPABASE_KEY_ORG_SETTINGS, updated);
       return updated;
     });
   };
 
   const resetSettings = () => {
     setSettings(DEFAULT_ORG_SETTINGS);
-    try {
-      localStorage.setItem(STORAGE_KEY_ORG, JSON.stringify(DEFAULT_ORG_SETTINGS));
-    } catch {}
+    try { localStorage.setItem(STORAGE_KEY_ORG, JSON.stringify(DEFAULT_ORG_SETTINGS)); } catch {}
+    upsertToSupabase(SUPABASE_KEY_ORG_SETTINGS, DEFAULT_ORG_SETTINGS);
   };
 
   return (
