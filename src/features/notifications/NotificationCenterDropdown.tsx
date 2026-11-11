@@ -51,18 +51,25 @@ export const NotificationCenterDropdown: React.FC<NotificationCenterDropdownProp
   const [activeTab, setActiveTab] = useState<'all' | 'estimates' | 'chat'>('all');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close when clicking outside
+  // Close when clicking outside or pressing Escape
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         onClose();
       }
     };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
+      window.addEventListener('keydown', handleKeyDown);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen, onClose]);
 
@@ -95,12 +102,20 @@ export const NotificationCenterDropdown: React.FC<NotificationCenterDropdownProp
   };
 
   return (
-    <div
-      ref={dropdownRef}
-      className="absolute right-0 top-full mt-2 w-96 sm:w-[420px] max-w-[92vw] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col text-xs text-slate-800 dark:text-slate-100 animate-in fade-in zoom-in-95 duration-150"
-    >
-      {/* Top Header */}
-      <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/80 dark:bg-slate-950/50">
+    <>
+      {/* Mobile Backdrop Overlay (PWA & Mobile screens) */}
+      <div
+        className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 sm:hidden animate-in fade-in duration-200"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      <div
+        ref={dropdownRef}
+        className="fixed inset-x-2 top-16 bottom-20 z-50 flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden text-xs text-slate-800 dark:text-slate-100 animate-in fade-in zoom-in-95 duration-150 sm:inset-auto sm:absolute sm:right-0 sm:top-full sm:bottom-auto sm:mt-2 sm:w-[420px] sm:max-h-[600px] sm:max-w-[420px]"
+      >
+        {/* Top Header */}
+        <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/80 dark:bg-slate-950/50 shrink-0">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-800 flex items-center justify-center text-emerald-700 dark:text-emerald-400">
             <BellIcon className="w-4 h-4" />
@@ -176,7 +191,7 @@ export const NotificationCenterDropdown: React.FC<NotificationCenterDropdownProp
       </div>
 
       {/* Browser Native Push Permission Banner */}
-      <div className="px-3.5 py-2.5 bg-slate-100/70 dark:bg-slate-950/70 border-b border-slate-200 dark:border-slate-800">
+      <div className="px-3.5 py-2.5 bg-slate-100/70 dark:bg-slate-950/70 border-b border-slate-200 dark:border-slate-800 shrink-0">
         {permission === 'granted' ? (
           <div className="flex items-center justify-between text-[11px] text-emerald-800 dark:text-emerald-300 font-medium">
             <span className="flex items-center gap-1.5">
@@ -207,7 +222,7 @@ export const NotificationCenterDropdown: React.FC<NotificationCenterDropdownProp
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex border-b border-slate-200 dark:border-slate-800 text-xs font-semibold px-2 bg-slate-50/50 dark:bg-slate-950/30">
+      <div className="flex border-b border-slate-200 dark:border-slate-800 text-xs font-semibold px-2 bg-slate-50/50 dark:bg-slate-950/30 shrink-0">
         <button
           type="button"
           onClick={() => setActiveTab('all')}
@@ -244,7 +259,7 @@ export const NotificationCenterDropdown: React.FC<NotificationCenterDropdownProp
       </div>
 
       {/* Notifications List Body */}
-      <div className="max-h-[380px] overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60">
+      <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60 sm:max-h-[380px]">
         {filteredNotifications.length === 0 ? (
           <div className="p-8 text-center text-slate-400 dark:text-slate-500 space-y-1">
             <BellIcon className="w-8 h-8 mx-auto stroke-[1.5] text-slate-300 dark:text-slate-700" />
@@ -342,10 +357,11 @@ export const NotificationCenterDropdown: React.FC<NotificationCenterDropdownProp
       </div>
 
       {/* Footer */}
-      <div className="p-2.5 bg-slate-50 dark:bg-slate-950/60 border-t border-slate-200 dark:border-slate-800 text-center text-[10px] text-slate-400">
+      <div className="p-2.5 bg-slate-50 dark:bg-slate-950/60 border-t border-slate-200 dark:border-slate-800 text-center text-[10px] text-slate-400 shrink-0">
         Notifications are preserved locally and synced with your browser session.
       </div>
     </div>
+    </>
   );
 };
 

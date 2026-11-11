@@ -77,7 +77,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   isMinimized: controlledMinimized,
   onToggleMinimize,
 }) => {
-  const { teamMembers: contextTeamMembers } = useAuth();
+  const { teamMembers: contextTeamMembers, isSuperAdmin } = useAuth();
   const { accentColor } = useTheme();
   const availableMembers = propTeamMembers || contextTeamMembers || [];
 
@@ -130,9 +130,17 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   }, []);
 
   // Transform system team members into candidate list
+  // Role-gated: Admin and Member cannot find or mention Super Admin; Admin and Member can mention each other;
+  // Super Admin can mention anyone.
   const candidates: MentionCandidate[] = useMemo(() => {
     const list: MentionCandidate[] = availableMembers
-      .filter((m) => m.status === 'active' || !m.status)
+      .filter((m) => {
+        const isActive = m.status === 'active' || !m.status;
+        if (!isActive) return false;
+        // Non-super-admins cannot mention super_admin
+        if (!isSuperAdmin && m.role === 'super_admin') return false;
+        return true;
+      })
       .map((m) => ({
         id: m.user_id,
         display_name: m.display_name,
@@ -142,7 +150,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         is_management: m.role === 'super_admin',
       }));
 
-    if (!list.some((c) => c.id === 'management')) {
+    // Super Admin can mention Management, but Admin/Member cannot find or mention Management
+    if (isSuperAdmin && !list.some((c) => c.id === 'management')) {
       list.unshift({
         id: 'management',
         display_name: 'Management',
@@ -154,7 +163,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
 
     return list;
-  }, [availableMembers]);
+  }, [availableMembers, isSuperAdmin]);
 
   const candidatesRef = useRef(candidates);
   candidatesRef.current = candidates;

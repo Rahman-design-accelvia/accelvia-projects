@@ -75,16 +75,48 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
 
+  // Candidate list for rich message formatting and @mention highlights
+  // Admin and Member cannot see or mention Super Admin; Admin and Member can mention each other; Super Admin can mention anyone.
   const mentionCandidates: MentionCandidate[] = useMemo(() => {
-    return activeTeamMembers.map((m) => ({
-      id: m.user_id,
-      display_name: m.display_name,
-      email: m.email,
-      role: m.role,
-      avatar_text: m.display_name.charAt(0).toUpperCase(),
-      is_management: m.role === 'super_admin',
-    }));
-  }, [activeTeamMembers]);
+    const list: MentionCandidate[] = activeTeamMembers
+      .filter((m) => {
+        const isActive = m.status === 'active' || !m.status;
+        if (!isActive) return false;
+        if (!isSuperAdmin && m.role === 'super_admin') return false;
+        return true;
+      })
+      .map((m) => ({
+        id: m.user_id,
+        display_name: m.display_name,
+        email: m.email,
+        role: m.role,
+        avatar_text: m.display_name.charAt(0).toUpperCase(),
+        is_management: m.role === 'super_admin',
+      }));
+
+    if (isSuperAdmin && !list.some((c) => c.id === 'management')) {
+      list.unshift({
+        id: 'management',
+        display_name: 'Management',
+        email: 'management@accelvia.internal',
+        role: 'management',
+        avatar_text: 'M',
+        is_management: true,
+      });
+    }
+
+    return list;
+  }, [activeTeamMembers, isSuperAdmin]);
+
+  // Filtered team members passed into RichTextEditor composer
+  const editorTeamMembers = useMemo(() => {
+    return activeTeamMembers.filter((m) => {
+      const isActive = m.status === 'active' || !m.status;
+      if (!isActive) return false;
+      if (!isSuperAdmin && m.role === 'super_admin') return false;
+      return true;
+    });
+  }, [activeTeamMembers, isSuperAdmin]);
 
   // Edit message modal state
   const [editingMessage, setEditingMessage] = useState<SafeMessage | null>(null);
@@ -434,7 +466,7 @@ export const RightPanelConversation: React.FC<RightPanelConversationProps> = ({
       >
         <RichTextEditor
           onSendMessage={onSendMessage}
-          teamMembers={activeTeamMembers}
+          teamMembers={editorTeamMembers}
           isMinimized={isInputMinimized}
           onToggleMinimize={setIsInputMinimized}
         />

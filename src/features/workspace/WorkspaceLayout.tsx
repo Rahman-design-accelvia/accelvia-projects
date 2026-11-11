@@ -565,12 +565,18 @@ export const WorkspaceLayout: React.FC = () => {
                   snippet = `🎙️ Voice Note (${Math.round(m.voice_note.duration_seconds)}s)${m.voice_note.transcript ? ': "' + m.voice_note.transcript + '"' : ''}`;
                 }
 
-                const isManagementMentioned = /@Management\b/i.test(snippet) && !isSuperAdmin;
+                const authorMember = (teamMembers || []).find((tm) => tm.user_id === m.author_id);
+                const isAuthorSuperAdmin = m.author_is_management || authorMember?.role === 'super_admin';
+
+                // Only allow Management mention if author was Super Admin
+                const isManagementMentioned = isAuthorSuperAdmin && /@Management\b/i.test(snippet);
                 // Mask Super Admin identity to Management for Admins and Members
                 const authorDisplayName = m.author_is_management ? 'Management' : m.author_name;
 
                 const mentionedMembers = (teamMembers || []).filter((tm) => {
                   if (tm.user_id === m.author_id) return false;
+                  // Non-super-admins cannot mention Super Admin; Admin & Member can mention each other; Super Admin can mention anyone
+                  if (!isAuthorSuperAdmin && tm.role === 'super_admin') return false;
                   const pattern = new RegExp(`@${tm.display_name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i');
                   return pattern.test(snippet);
                 });
@@ -883,13 +889,16 @@ export const WorkspaceLayout: React.FC = () => {
     }
 
     // Google L6 Standard @mention scanner: Target mentioned users
+    // Role-gated: Non-super-admins cannot mention Super Admin; Admin & Member can mention each other; Super Admin can mention anyone.
     const mentionedMembers = (teamMembers || []).filter((m) => {
       if (m.user_id === currentUser.user_id) return false;
+      // If current user is not Super Admin, exclude Super Admin users from being mentioned
+      if (!isSuperAdmin && m.role === 'super_admin') return false;
       const pattern = new RegExp(`@${m.display_name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i');
       return pattern.test(snippet);
     });
 
-    const isManagementMentioned = /@Management\b/i.test(snippet) && !isSuperAdmin;
+    const isManagementMentioned = isSuperAdmin && /@Management\b/i.test(snippet);
     const authorDisplayName = isSuperAdmin ? 'Management' : currentUser.display_name;
 
     // Cross-tab / cross-device broadcast to alert recipients (the sender does not receive a self-toast)
