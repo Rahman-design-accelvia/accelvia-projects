@@ -5,7 +5,7 @@
 // - Member/Admin registration with Super Admin approval workflow
 // - Reliable Google / Gmail authentication
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   UserRole,
   UserProfile,
@@ -112,6 +112,10 @@ const STORAGE_KEY_SUPER_ADMIN = 'accelvia_super_admin_profile_v5';
 const STORAGE_KEY_PASSWORD_REQUESTS = 'accelvia_password_reset_requests_v1';
 const STORAGE_KEY_PASSWORD_AUDIT = 'accelvia_password_audit_v1';
 
+// Supabase shared JSON keys in app_workspace_data table
+const SUPABASE_KEY_PASSWORD_REQUESTS = 'password_reset_requests';
+const SUPABASE_KEY_PASSWORD_AUDIT = 'password_audit';
+
 export const DEFAULT_CREDENTIALS = {
   super_admin: {
     email: 'gravityahmed11@gmail.com',
@@ -140,6 +144,16 @@ const INITIAL_TEAM_MEMBERS: TeamMember[] = [
     email: 'gravityahmed11@gmail.com',
     role: 'super_admin',
     password: 'Alpha@@2026',
+    status: 'active',
+    created_at: '2026-10-30T00:00:00Z',
+  },
+  {
+    user_id: 'user-1793962269072',
+    display_name: 'Nahidur Abedin',
+    email: 'nahidur.abedin@gmail.com',
+    role: 'admin',
+    designation: 'CEO / Project Director',
+    password: 'Password123!',
     status: 'active',
     created_at: '2026-10-30T00:00:00Z',
   },
@@ -244,6 +258,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {}
   }, [teamMembers]);
 
+  // Track last Supabase-synced JSON to avoid echo loops
+  const lastCloudJson = useRef<Record<string, string>>({});
+
+  const upsertWorkspaceKey = useCallback(async (key: string, value: unknown) => {
+    if (!isSupabaseConfigured) return;
+    const currentJson = JSON.stringify(value);
+    if (lastCloudJson.current[key] === currentJson) return;
+    lastCloudJson.current[key] = currentJson;
+    try {
+      await supabase.from('app_workspace_data').upsert({
+        key,
+        value,
+        updated_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.warn(`[AuthSync] Could not upsert ${key} to Supabase:`, e);
+    }
+  }, []);
+
   // Synchronize users from Supabase database centrally
   const fetchSupabaseUsers = useCallback(async () => {
     if (!isSupabaseConfigured) return;
@@ -270,6 +303,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           designation: u.designation || (u.role === 'super_admin' ? 'Executive Director' : u.role === 'admin' ? 'Project Manager' : 'Specialist Engineer'),
           requested_designation: u.requested_designation,
           password: u.password,
+          must_change_password: Boolean(u.must_change_password),
           status: u.status,
           created_at: u.created_at,
           notes: u.notes,
@@ -284,6 +318,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     fetchSupabaseUsers();
+  }, [fetchSupabaseUsers]);
+
+  // Realtime subscription for app_users table (cross-platform live sync)
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    const channel = supabase
+      .channel('app_users_realtime_sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'app_users' },
+        () => {
+          fetchSupabaseUsers();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      try {
+        supabase.removeChannel(channel);
+      } catch {}
+    };
   }, [fetchSupabaseUsers]);
 
   const pendingRegistrations = useMemo(() => {
@@ -382,14 +437,81 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {}
   }, [passwordAuditHistory]);
 
+  // Initial fetch for password reset requests & audit history from Supabase
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('app_workspace_data')
+          .select('*')
+          .in('key', [SUPABASE_KEY_PASSWORD_REQUESTS, SUPABASE_KEY_PASSWORD_AUDIT]);
+
+        if (!error && Array.isArray(data)) {
+          data.forEach((row) => {
+            const valJson = JSON.stringify(row.value);
+            lastCloudJson.current[row.key] = valJson;
+            if (row.key === SUPABASE_KEY_PASSWORD_REQUESTS && Array.isArray(row.value)) {
+              setPasswordResetRequests(row.value);
+              try { localStorage.setItem(STORAGE_KEY_PASSWORD_REQUESTS, valJson); } catch {}
+            } else if (row.key === SUPABASE_KEY_PASSWORD_AUDIT && Array.isArray(row.value)) {
+              setPasswordAuditHistory(row.value);
+              try { localStorage.setItem(STORAGE_KEY_PASSWORD_AUDIT, valJson); } catch {}
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('[AuthSync] Initial fetch for password data failed:', e);
+      }
+    })();
+  }, []);
+
+  // Realtime subscription for password reset requests & audit history
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    const channel = supabase
+      .channel('auth_workspace_realtime_sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'app_workspace_data' },
+        (payload) => {
+          const key = (payload.new as Record<string, unknown>)?.key as string;
+          const value = (payload.new as Record<string, unknown>)?.value;
+          if (!key || value === undefined) return;
+          if (key !== SUPABASE_KEY_PASSWORD_REQUESTS && key !== SUPABASE_KEY_PASSWORD_AUDIT) return;
+
+          const incomingJson = JSON.stringify(value);
+          if (lastCloudJson.current[key] === incomingJson) return;
+          lastCloudJson.current[key] = incomingJson;
+
+          if (key === SUPABASE_KEY_PASSWORD_REQUESTS && Array.isArray(value)) {
+            setPasswordResetRequests(value);
+            try { localStorage.setItem(STORAGE_KEY_PASSWORD_REQUESTS, incomingJson); } catch {}
+          } else if (key === SUPABASE_KEY_PASSWORD_AUDIT && Array.isArray(value)) {
+            setPasswordAuditHistory(value);
+            try { localStorage.setItem(STORAGE_KEY_PASSWORD_AUDIT, incomingJson); } catch {}
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      try { supabase.removeChannel(channel); } catch {}
+    };
+  }, []);
+
   const addPasswordAuditRecord = useCallback((record: Omit<PasswordAuditRecord, 'id' | 'timestamp'>) => {
     const newRecord: PasswordAuditRecord = {
       ...record,
       id: `pwd-audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       timestamp: new Date().toISOString(),
     };
-    setPasswordAuditHistory((prev) => [newRecord, ...prev]);
-  }, []);
+    setPasswordAuditHistory((prev) => {
+      const updated = [newRecord, ...prev];
+      upsertWorkspaceKey(SUPABASE_KEY_PASSWORD_AUDIT, updated);
+      return updated;
+    });
+  }, [upsertWorkspaceKey]);
 
   const pendingPasswordRequests = useMemo(() => {
     return passwordResetRequests.filter((r) => r.status === 'pending');
@@ -614,19 +736,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (isSupabaseConfigured) {
         try {
-          await supabase.from('app_users').insert({
+          const { error } = await supabase.from('app_users').insert({
             id: newMember.user_id,
             display_name: displayName,
             email: normalizedEmail,
             role: newMember.role,
             requested_role: newMember.requested_role,
+            designation: newMember.role === 'admin' ? 'Project Manager' : 'Specialist Engineer',
             password: hashedPassword,
             must_change_password: false,
             status: 'pending_approval',
             notes: data.notes || null,
+            created_at: newMember.created_at,
+            updated_at: new Date().toISOString(),
           });
-        } catch (e) {
-          console.warn('Could not persist registration to Supabase:', e);
+          if (error) {
+            console.error('[Auth] Could not persist registration to Supabase:', error);
+            return { success: false, status: 'pending_approval', error: error.message };
+          }
+        } catch (e: any) {
+          console.error('[Auth] Exception persisting registration:', e);
+          return { success: false, status: 'pending_approval', error: e?.message || 'Registration failed' };
         }
       }
 
@@ -719,6 +849,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 error: 'Your registration is currently pending approval by the Super Admin. You will be able to log in once your account is activated.',
               };
             }
+            if (data.status === 'suspended' || data.status === 'inactive') {
+              return {
+                success: false,
+                error: 'This account has been deactivated or suspended by management. Please contact Super Admin.',
+              };
+            }
 
             const expectedPassword = data.password || 'Password123!';
             const isValid = await verifyPassword(password, expectedPassword);
@@ -765,6 +901,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return {
             success: false,
             error: 'Your registration is currently pending approval by the Super Admin. You will be able to log in once your account is activated.',
+          };
+        }
+        if (matchedMember.status === 'suspended') {
+          return {
+            success: false,
+            error: 'This account has been deactivated or suspended by management.',
           };
         }
 
@@ -1032,37 +1174,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [session.userId, logout]);
 
-  // Super Admin: Direct Provision Team Member
+  // Super Admin / Admin: Direct Provision Team Member
   const addTeamMember = useCallback(
-    async (member: { display_name: string; email: string; role: UserRole; password?: string }): Promise<TeamMember> => {
+    async (member: { display_name: string; email: string; role: UserRole; password?: string; designation?: string }): Promise<TeamMember> => {
+      const cleanName = member.display_name.trim();
+      const cleanEmail = member.email.trim().toLowerCase();
       const assignedPassword = member.password?.trim() || 'Password123!';
       const hashedPassword = await hashPassword(assignedPassword);
+      const designation = member.designation?.trim() || (member.role === 'admin' ? 'Project Manager' : 'Specialist Engineer');
+
       const newMember: TeamMember = {
-        user_id: `user-${Date.now()}`,
-        display_name: member.display_name,
-        email: member.email.trim().toLowerCase(),
+        user_id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        display_name: cleanName,
+        email: cleanEmail,
         role: member.role,
+        designation,
         password: hashedPassword,
         must_change_password: false,
         status: 'active',
         created_at: new Date().toISOString(),
       };
 
-      setTeamMembers((prev) => [newMember, ...prev]);
+      setTeamMembers((prev) => {
+        const filtered = prev.filter((m) => m.email.toLowerCase() !== cleanEmail);
+        return [newMember, ...filtered];
+      });
 
       if (isSupabaseConfigured) {
         try {
-          await supabase.from('app_users').upsert({
+          const { error } = await supabase.from('app_users').upsert({
             id: newMember.user_id,
             display_name: newMember.display_name,
             email: newMember.email,
             role: newMember.role,
+            designation: newMember.designation,
             password: hashedPassword,
             must_change_password: false,
             status: 'active',
+            created_at: newMember.created_at,
+            updated_at: new Date().toISOString(),
           });
-        } catch (e) {
-          console.warn('Could not save user to Supabase app_users:', e);
+          if (error) {
+            console.error('[Auth] Could not save user to Supabase app_users:', error);
+            throw new Error(`Database error: ${error.message}`);
+          }
+        } catch (e: any) {
+          console.error('[Auth] Exception saving user to Supabase:', e);
+          throw e;
         }
       }
 
@@ -1557,7 +1715,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             submitted_at: new Date().toISOString(),
           };
 
-          setPasswordResetRequests((prev) => [newReq, ...prev]);
+          setPasswordResetRequests((prev) => {
+            const updated = [newReq, ...prev];
+            upsertWorkspaceKey(SUPABASE_KEY_PASSWORD_REQUESTS, updated);
+            return updated;
+          });
 
           addPasswordAuditRecord({
             target_user_id: targetUser.user_id,
@@ -1573,7 +1735,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return { success: true, message: genericConfirmation };
     },
-    [teamMembers, passwordResetRequests, addPasswordAuditRecord]
+    [teamMembers, passwordResetRequests, addPasswordAuditRecord, upsertWorkspaceKey]
   );
 
   // 2. Submit Password Change Request (Authenticated Admin/Member Profile)
@@ -1606,7 +1768,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         submitted_at: new Date().toISOString(),
       };
 
-      setPasswordResetRequests((prev) => [newReq, ...prev]);
+      setPasswordResetRequests((prev) => {
+        const updated = [newReq, ...prev];
+        upsertWorkspaceKey(SUPABASE_KEY_PASSWORD_REQUESTS, updated);
+        return updated;
+      });
 
       addPasswordAuditRecord({
         target_user_id: currentUser.user_id,
@@ -1620,7 +1786,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return { success: true };
     },
-    [currentRole, currentUser, passwordResetRequests, addPasswordAuditRecord]
+    [currentRole, currentUser, passwordResetRequests, addPasswordAuditRecord, upsertWorkspaceKey]
   );
 
   // 3. Approve Password Reset Request (Super Admin or Admin)
@@ -1701,9 +1867,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         temporary_password_issued: true,
       };
 
-      setPasswordResetRequests((prev) =>
-        prev.map((r) => (r.id === requestId ? updatedReq : r))
-      );
+      setPasswordResetRequests((prev) => {
+        const updated = prev.map((r) => (r.id === requestId ? updatedReq : r));
+        upsertWorkspaceKey(SUPABASE_KEY_PASSWORD_REQUESTS, updated);
+        return updated;
+      });
 
       // Record Audit
       addPasswordAuditRecord({
@@ -1731,7 +1899,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return { success: true, temporaryPassword };
     },
-    [passwordResetRequests, currentRole, currentUser, addPasswordAuditRecord]
+    [passwordResetRequests, currentRole, currentUser, addPasswordAuditRecord, upsertWorkspaceKey]
   );
 
   // 4. Reject Password Reset Request
@@ -1766,9 +1934,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         reviewed_at: new Date().toISOString(),
       };
 
-      setPasswordResetRequests((prev) =>
-        prev.map((r) => (r.id === requestId ? updatedReq : r))
-      );
+      setPasswordResetRequests((prev) => {
+        const updated = prev.map((r) => (r.id === requestId ? updatedReq : r));
+        upsertWorkspaceKey(SUPABASE_KEY_PASSWORD_REQUESTS, updated);
+        return updated;
+      });
 
       addPasswordAuditRecord({
         target_user_id: targetReq.user_id,
@@ -1782,7 +1952,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return { success: true };
     },
-    [passwordResetRequests, currentRole, currentUser, addPasswordAuditRecord]
+    [passwordResetRequests, currentRole, currentUser, addPasswordAuditRecord, upsertWorkspaceKey]
   );
 
   // 5. Super Admin Direct Reset

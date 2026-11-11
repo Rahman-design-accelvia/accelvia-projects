@@ -4,7 +4,7 @@
 // - Native Web Push Notifications (Android & iOS 16.4+ standalone)
 // - Click-to-Focus Window Navigation & Vibration Patterns
 
-const CACHE_NAME = 'accelvia-pwa-v1';
+const CACHE_NAME = 'accelvia-pwa-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

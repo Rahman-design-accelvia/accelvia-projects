@@ -30,7 +30,8 @@ import {
   Briefcase,
   Edit3,
   X,
-  AlertTriangle
+  AlertTriangle,
+  AlertCircle
 } from 'lucide-react';
 
 interface TeamManagementModalProps {
@@ -215,6 +216,8 @@ export const TeamManagementModal: React.FC<TeamManagementModalProps> = ({ isOpen
   } | null>(null);
 
   const [hasCopiedBanner, setHasCopiedBanner] = useState(false);
+  const [isAddingMember, setIsAddingMember] = useState(false);
+  const [addMemberError, setAddMemberError] = useState<string | null>(null);
 
   const generateRandomPassword = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
@@ -225,31 +228,42 @@ export const TeamManagementModal: React.FC<TeamManagementModalProps> = ({ isOpen
     setPassword(res);
   };
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !email.trim()) return;
 
-    const assignedPassword = password.trim() || 'Password123!';
+    setAddMemberError(null);
+    setIsAddingMember(true);
 
-    addTeamMember({
-      display_name: name.trim(),
-      email: email.trim(),
-      role,
-      password: assignedPassword,
-    });
+    try {
+      const assignedPassword = password.trim() || 'Password123!';
 
-    setLastAddedMember({
-      name: name.trim(),
-      email: email.trim(),
-      role,
-      password: assignedPassword,
-    });
-    setHasCopiedBanner(false);
+      await addTeamMember({
+        display_name: name.trim(),
+        email: email.trim(),
+        role,
+        password: assignedPassword,
+      });
 
-    setName('');
-    setEmail('');
-    setRole('member');
-    setPassword('Password123!');
+      setLastAddedMember({
+        name: name.trim(),
+        email: email.trim(),
+        role,
+        password: assignedPassword,
+      });
+      setHasCopiedBanner(false);
+      setActionNotice(`User "${name.trim()}" created successfully and saved to cloud.`);
+      setTimeout(() => setActionNotice(null), 4000);
+
+      setName('');
+      setEmail('');
+      setRole('member');
+      setPassword('Password123!');
+    } catch (err: any) {
+      setAddMemberError(err?.message || 'Failed to create user. Please check database connectivity.');
+    } finally {
+      setIsAddingMember(false);
+    }
   };
 
   const copyCredentialsText = (member: { name?: string; display_name?: string; email: string; role: string }) => {
@@ -1217,13 +1231,21 @@ Your account details:
                   <div className="sm:col-span-4">
                     <button
                       type="submit"
-                      className="w-full py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-xs flex items-center justify-center gap-1.5"
+                      disabled={isAddingMember}
+                      className="w-full py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs transition shadow-xs flex items-center justify-center gap-1.5"
                     >
                       <UserPlus className="w-3.5 h-3.5" />
-                      <span>Create & Activate Account</span>
+                      <span>{isAddingMember ? 'Saving to Database...' : 'Create & Activate Account'}</span>
                     </button>
                   </div>
                 </div>
+
+                {addMemberError && (
+                  <div className="p-3 bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-700 text-rose-800 dark:text-rose-200 rounded-xl flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{addMemberError}</span>
+                  </div>
+                )}
               </form>
             </div>
           </div>
